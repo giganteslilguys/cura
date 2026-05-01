@@ -2,7 +2,7 @@ defmodule CuraWeb.UserSocket do
   use Phoenix.Socket
   require Logger
 
-  channel "peer:*", CuraWeb.PeerChannel
+  channel "room:*", CuraWeb.SignalChannel
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) when is_binary(token) do

@@ -13,10 +13,7 @@ defmodule Cura.Application do
       {DNSCluster, query: Application.get_env(:cura, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Cura.PubSub},
       CuraWeb.Presence,
-      {Registry, keys: :unique, name: Cura.PeerRegistry},
-      CuraWeb.Endpoint,
-      Cura.PeerSupervisor,
-      {Cura.Room, []}
+      CuraWeb.Endpoint
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
