@@ -78,18 +78,34 @@ defmodule Cura.Peer do
   ]
 
   @doc false
-  # Restrict the host candidates ex_ice gathers to addresses that can
-  # actually be reached from the browser. Without this, in WSL2 (and
-  # most containerised environments) every loopback / link-local /
-  # secondary-loopback / IPv6 interface produces a candidate that the
-  # browser will only mark "failed" after ~30 s of STUN retransmits,
-  # which is what the user sees as a long "Connecting…" before media
-  # finally starts to flow on a usable pair.
-  def ice_ip_filter({127, _, _, _}), do: false
-  def ice_ip_filter({169, 254, _, _}), do: false
-  def ice_ip_filter({10, 255, 255, 254}), do: false
-  def ice_ip_filter({_, _, _, _}), do: true
-  def ice_ip_filter(_), do: false
+  # Filter the host candidates ex_ice gathers. Mode is controlled by
+  # the `:cura, :ice_hosts` app env (set from `ICE_HOSTS` at boot):
+  #
+  #   * `:loopback` — emit only 127.0.0.0/8. Right when both browsers
+  #     and the server are on the same machine. Avoids the ~30s-per-
+  #     pair STUN retransmit penalty that Chrome's mDNS host
+  #     obfuscation otherwise causes (the server can't resolve
+  #     `xxx.local`, so its outgoing checks all time out before the
+  #     peer-reflexive fallback kicks in).
+  #
+  #   * `:lan` — drop loopback and link-local; keep real LAN/WAN IPs.
+  #     For multi-machine dev (ngrok between hosts).
+  #
+  #   * default / unset — drop link-local only; keep everything else.
+  def ice_ip_filter(ip) do
+    case Application.get_env(:cura, :ice_hosts) do
+      :loopback ->
+        match?({127, _, _, _}, ip)
+
+      :lan ->
+        match?({_, _, _, _}, ip) and
+          not match?({127, _, _, _}, ip) and
+          not match?({169, 254, _, _}, ip)
+
+      _ ->
+        match?({_, _, _, _}, ip) and not match?({169, 254, _, _}, ip)
+    end
+  end
 
   @spec start_link(term(), term()) :: GenServer.on_start()
   def start_link(args, opts) do

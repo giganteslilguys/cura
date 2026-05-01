@@ -28,6 +28,22 @@ if origins = System.get_env("CORS_ORIGINS") do
   config :cura, :cors_origins, String.split(origins, ",", trim: true)
 end
 
+# WebRTC host-candidate gathering mode. See `Cura.Peer.ice_ip_filter/1`.
+# In dev we default to `:loopback` because the typical case is two browser
+# tabs on the same machine as the server; that gives the fastest ICE
+# nomination. Override with ICE_HOSTS=lan for multi-machine setups, or
+# ICE_HOSTS=any for the unfiltered behaviour.
+ice_hosts =
+  case System.get_env("ICE_HOSTS") do
+    "loopback" -> :loopback
+    "lan" -> :lan
+    "any" -> :any
+    nil -> if config_env() == :dev, do: :loopback, else: :any
+    _ -> :any
+  end
+
+config :cura, :ice_hosts, ice_hosts
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
