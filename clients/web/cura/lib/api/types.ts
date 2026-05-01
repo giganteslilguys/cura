@@ -14,3 +14,18 @@ export type AuthSuccess = {
 };
 
 export type FieldErrors = Record<string, string[]>;
+
+export type MeetingStatus = "scheduled" | "completed" | "canceled" | "rejected";
+
+export type Meeting = {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  duration: number;
+  notes: string | null;
+  timezone: string;
+  status: MeetingStatus;
+  doctor: User | null;
+  patient: User | null;
+};

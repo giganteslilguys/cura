@@ -22,6 +22,12 @@ end
 
 config :cura, CuraWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+# CORS origins can be overridden at boot via env var (comma-separated).
+# Useful for local dev with ngrok where the public URL changes per run.
+if origins = System.get_env("CORS_ORIGINS") do
+  config :cura, :cors_origins, String.split(origins, ",", trim: true)
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

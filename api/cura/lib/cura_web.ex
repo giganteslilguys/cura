@@ -1,12 +1,11 @@
 defmodule CuraWeb do
   @moduledoc """
-  The entrypoint for defining the JSON API web interface.
-
-      use CuraWeb, :controller
-      use CuraWeb, :router
+  Entrypoint for the JSON API web layer. The frontend lives in
+  `clients/web/cura` (Next.js); this app only serves JSON over HTTP and
+  WebRTC signalling over the Phoenix Socket.
   """
 
-  def static_paths, do: ~w(assets fonts images favicon.ico robots.txt)
+  def static_paths, do: ~w()
 
   def router do
     quote do
@@ -29,57 +28,6 @@ defmodule CuraWeb do
 
       import Plug.Conn
 
-      unquote(verified_routes())
-    end
-  end
-
-  def browser_controller do
-    quote do
-      use Phoenix.Controller, formats: [:html, :json]
-
-      import Plug.Conn
-      import Phoenix.HTML
-
-      unquote(verified_routes())
-    end
-  end
-
-
-  def live_view do
-    quote do
-      use Phoenix.LiveView,
-        layout: {CuraWeb.Layouts, :app}
-
-      unquote(html_helpers())
-    end
-  end
-
-  def html do
-    quote do
-      use Phoenix.Component
-
-      # Import convenience functions from controllers
-      import Phoenix.Controller,
-        only: [get_csrf_token: 0, view_module: 1, view_template: 1]
-
-      # Include general helpers for rendering HTML
-      # unquote(html_helpers())
-    end
-  end
-
-  defp html_helpers do
-    quote do
-      # Translation
-      # use Gettext, backend: CuraWeb.Gettext
-
-      # HTML escaping functionality
-      import Phoenix.HTML
-
-      # Shortcut for generating JS commands
-      alias Phoenix.LiveView.JS
-      # import CuraWeb.Helpers
-
-      # Routes generation with the ~p sigil
       unquote(verified_routes())
     end
   end

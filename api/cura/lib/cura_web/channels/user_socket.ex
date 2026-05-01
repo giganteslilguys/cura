@@ -5,23 +5,20 @@ defmodule CuraWeb.UserSocket do
   channel "peer:*", CuraWeb.PeerChannel
 
   @impl true
-  def connect(_params, socket, %{session: session}) do
-    token = session[:user_token] || session["user_token"]
-    Logger.info("[UserSocket] connect — session token present: #{is_binary(token)}")
+  def connect(%{"token" => token}, socket, _connect_info) when is_binary(token) do
+    case Cura.Accounts.fetch_user_by_session_token(token) do
+      {:ok, user} ->
+        Logger.info("[UserSocket] connect — authenticated as #{user.email} (#{user.role})")
+        {:ok, assign(socket, :current_user, user)}
 
-    with token when is_binary(token) <- token,
-         {:ok, user} <- Cura.Accounts.fetch_user_by_session_token(token) do
-      Logger.info("[UserSocket] connect — authenticated as #{user.email} (#{user.role})")
-      {:ok, assign(socket, :current_user, user)}
-    else
       _ ->
-        Logger.warning("[UserSocket] connect — rejected, no valid session token")
+        Logger.warning("[UserSocket] connect — rejected, invalid token")
         :error
     end
   end
 
   def connect(_params, _socket, _connect_info) do
-    Logger.warning("[UserSocket] connect — rejected, no connect_info/session")
+    Logger.warning("[UserSocket] connect — rejected, no token in params")
     :error
   end
 

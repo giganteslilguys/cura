@@ -13,7 +13,12 @@ defmodule Cura.Meetings do
   end
 
   def list_meetings_for_user(user_id) do
-    Repo.all(from m in Meeting, where: m.doctor_id == ^user_id or m.patient_id == ^user_id)
+    Repo.all(
+      from m in Meeting,
+        where: m.doctor_id == ^user_id or m.patient_id == ^user_id,
+        order_by: [asc: m.date, asc: m.time],
+        preload: [:doctor, :patient]
+    )
   end
 
   def get_meeting_for_user!(id, user_id) do
