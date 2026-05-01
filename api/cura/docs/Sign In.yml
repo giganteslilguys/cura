@@ -1,0 +1,22 @@
+info:
+  name: Sign In
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:4000/api/auth/sign_in
+  body:
+    type: json
+    data: |-
+      {
+        "email": "doctor1@cura.pt",
+        "password": "password1234"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

@@ -48,7 +48,7 @@ defmodule CuraWeb do
   def live_view do
     quote do
       use Phoenix.LiveView,
-        layout: {CuraWeb.Layouts, :root}
+        layout: {CuraWeb.Layouts, :app}
 
       unquote(html_helpers())
     end

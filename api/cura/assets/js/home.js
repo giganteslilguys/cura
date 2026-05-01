@@ -2466,7 +2466,10 @@ async function joinChannel() {
     return;
   }
 
-  const socket = new Socket('/socket');
+  const csrfToken = document
+    .querySelector("meta[name='csrf-token']")
+    ?.getAttribute('content');
+  const socket = new Socket('/socket', { params: { _csrf_token: csrfToken } });
   socket.connect();
   
   channel = socket.channel(`peer:signalling:${roomId}`);
@@ -2526,8 +2529,7 @@ async function joinChannel() {
       })));
 
       // Assign local tracks to existing sendonly senders using replaceTrack.
-      // replaceTrack does NOT change transceiver direction (stays sendonly) and does NOT
-      // trigger onnegotiationneeded, so no unwanted renegotiation cycle with the server.
+      // replaceTrack does NOT trigger onnegotiationneeded, so no unwanted renegotiation cycle.
       if (localStream && !localTracksAdded) {
         const videoTrack = localStream.getVideoTracks()[0] || null;
         const audioTrack = localStream.getAudioTracks()[0] || null;
@@ -2537,19 +2539,47 @@ async function joinChannel() {
           audio: audioTrack ? `${audioTrack.kind} ${audioTrack.id}` : 'none'
         });
 
-        for (const transceiver of pc.getTransceivers()) {
-          if (transceiver.direction !== 'sendonly' || transceiver.sender.track) continue;
+        // Parse m-line kinds directly from the SDP, indexed in order.
+        // We can't rely on transceiver.receiver.track?.kind: when direction
+        // settles to sendonly, some browsers null out receiver.track.
+        const mLineKinds = sdpOffer
+          .split(/\r?\n/)
+          .filter(line => line.startsWith('m='))
+          .map(line => line.slice(2).split(/\s+/)[0]);
 
-          const kind = transceiver.receiver.track?.kind;
-          console.log(`Found idle sendonly transceiver mid=${transceiver.mid} kind=${kind}`);
+        const transceivers = pc.getTransceivers();
+        let videoAssigned = false;
+        let audioAssigned = false;
 
-          if (kind === 'video' && videoTrack) {
+        for (let i = 0; i < transceivers.length; i++) {
+          const transceiver = transceivers[i];
+          if (transceiver.sender.track) continue;
+          // Skip transceivers where the server is the sender (we just receive).
+          if (transceiver.direction === 'recvonly' || transceiver.direction === 'inactive') continue;
+
+          const kind = mLineKinds[i] || transceiver.receiver.track?.kind;
+          console.log(`Idle send transceiver idx=${i} mid=${transceiver.mid} dir=${transceiver.direction} kind=${kind}`);
+
+          if (kind === 'video' && videoTrack && !videoAssigned) {
             await transceiver.sender.replaceTrack(videoTrack);
+            try { transceiver.direction = 'sendonly'; } catch (_) {}
+            videoAssigned = true;
             console.log('✅ Assigned video track to sender');
-          } else if (kind === 'audio' && audioTrack) {
+          } else if (kind === 'audio' && audioTrack && !audioAssigned) {
             await transceiver.sender.replaceTrack(audioTrack);
+            try { transceiver.direction = 'sendonly'; } catch (_) {}
+            audioAssigned = true;
             console.log('✅ Assigned audio track to sender');
           }
+        }
+
+        if (videoTrack && !videoAssigned) {
+          console.warn('⚠️ No idle send transceiver matched video — falling back to addTrack');
+          pc.addTrack(videoTrack, localStream);
+        }
+        if (audioTrack && !audioAssigned) {
+          console.warn('⚠️ No idle send transceiver matched audio — falling back to addTrack');
+          pc.addTrack(audioTrack, localStream);
         }
 
         localTracksAdded = true;
