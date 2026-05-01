@@ -44,10 +44,7 @@ defmodule Cura.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:waffle_ecto, "~> 0.0"},
       {:waffle, "~> 1.1.10"},
-      {:bandit, "~> 1.5"},
-
-      # webrtc / signalling
-      {:ex_webrtc, "~> 0.14.0"}
+      {:bandit, "~> 1.5"}
     ]
   end
 
