@@ -1,37 +1,39 @@
 defmodule CuraWeb.Router do
   use CuraWeb, :router
 
-  pipeline :browser do
-    plug :accepts, ["html"]
-    plug :fetch_session
-    plug :fetch_live_flash
-    plug :put_root_layout, html: {CuraWeb.Layouts, :root}
-    plug :protect_from_forgery
-    plug :put_secure_browser_headers
-  end
+  import CuraWeb.UserAuth
 
   pipeline :api do
     plug :accepts, ["json"]
   end
 
-  scope "/", CuraWeb do
-    pipe_through :browser
-
-    get "/", PageController, :home
+  pipeline :authenticated_api do
+    plug :fetch_api_user
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", CuraWeb do
-  #   pipe_through :api
-  # end
+  scope "/api", CuraWeb.Api do
+    pipe_through :api
+
+    post "/auth/sign_up", AuthController, :sign_up
+    post "/auth/sign_in", AuthController, :sign_in
+  end
+
+  scope "/api", CuraWeb.Api do
+    pipe_through [:api, :authenticated_api]
+
+    delete "/auth/sign_out", AuthController, :sign_out
+    get "/me", AuthController, :me
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:cura, :dev_routes) do
-    # If you want to use the LiveDashboard in production, you should put
-    # it behind authentication and allow only admins to access it.
-    # If your application does not have an admins-only section yet,
-    # you can use Plug.BasicAuth to set up some basic authentication
-    # as long as you are also using SSL (which you should anyway).
+    pipeline :browser do
+      plug :accepts, ["html"]
+      plug :fetch_session
+      plug :protect_from_forgery
+      plug :put_secure_browser_headers
+    end
+
     import Phoenix.LiveDashboard.Router
 
     scope "/dev" do

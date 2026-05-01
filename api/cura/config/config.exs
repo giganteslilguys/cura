@@ -16,11 +16,10 @@ config :cura, CuraWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: CuraWeb.ErrorHTML, json: CuraWeb.ErrorJSON],
+    formats: [json: CuraWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Cura.PubSub,
-  live_view: [signing_salt: "jK8dS+/M"]
+  pubsub_server: Cura.PubSub
 
 # Configure the mailer
 #
