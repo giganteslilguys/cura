@@ -14,6 +14,7 @@ config :cura,
 # Configure the endpoint
 config :cura, CuraWeb.Endpoint,
   url: [host: "localhost"],
+  live_view: [signing_salt: "GKuHmlwI0dr4qwIB"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [json: CuraWeb.ErrorJSON],

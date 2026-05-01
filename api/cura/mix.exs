@@ -59,13 +59,20 @@ defmodule Cura.MixProject do
        app: false,
        compile: false,
        depth: 1},
-      {:swoosh, "~> 1.16"},
+      {:swoosh, "~> 1.25"},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:waffle_ecto, "~> 0.0"},
+      {:waffle, "~> 1.1.10"},
+      {:bandit, "~> 1.5"},
+
+      # calls
+      {:ex_webrtc, "~> 0.14.0"},
+      {:ex_webrtc_dashboard, "~> 0.9.0"},
+
     ]
   end
 

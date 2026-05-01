@@ -12,10 +12,11 @@ defmodule Cura.Application do
       Cura.Repo,
       {DNSCluster, query: Application.get_env(:cura, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Cura.PubSub},
-      # Start a worker by calling: Cura.Worker.start_link(arg)
-      # {Cura.Worker, arg},
-      # Start to serve requests, typically the last entry
-      CuraWeb.Endpoint
+      CuraWeb.Presence,
+      {Registry, keys: :unique, name: Cura.PeerRegistry},
+      CuraWeb.Endpoint,
+      Cura.PeerSupervisor,
+      {Cura.Room, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

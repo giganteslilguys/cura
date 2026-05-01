@@ -3,3 +3,4 @@
 #     mix run priv/repo/seeds.exs
 
 Code.require_file("seeds/users.exs", __DIR__)
+Code.require_file("seeds/meetings.exs", __DIR__)

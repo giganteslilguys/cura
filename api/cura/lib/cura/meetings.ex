@@ -1,0 +1,50 @@
+defmodule Cura.Meetings do
+  @moduledoc """
+  The Meetings context.
+  """
+
+  import Ecto.Query, warn: false
+  alias Cura.Repo
+
+  alias Cura.Meetings.Meeting
+
+  def list_meetings do
+    Repo.all(Meeting)
+  end
+
+  def list_meetings_for_user(user_id) do
+    Repo.all(from m in Meeting, where: m.doctor_id == ^user_id or m.patient_id == ^user_id)
+  end
+
+  def get_meeting_for_user!(id, user_id) do
+    Repo.get_by!(Meeting, [id: id], or: [doctor_id: user_id, patient_id: user_id])
+    |> Repo.preload([:doctor, :patient])
+  end
+
+  def get_meeting!(id) do
+    case Repo.get(Meeting, id) do
+      nil -> {:error, :not_found}
+      meeting -> {:ok, Repo.preload(meeting, [:doctor, :patient])}
+    end
+  end
+
+  def create_meeting(attrs \\ %{}) do
+    %Meeting{}
+    |> Meeting.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_meeting(%Meeting{} = meeting, attrs) do
+    meeting
+    |> Meeting.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_meeting(%Meeting{} = meeting) do
+    Repo.delete(meeting)
+  end
+
+  def change_meeting(%Meeting{} = meeting, attrs \\ %{}) do
+    Meeting.changeset(meeting, attrs)
+  end
+end

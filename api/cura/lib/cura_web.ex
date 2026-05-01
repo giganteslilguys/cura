@@ -33,6 +33,57 @@ defmodule CuraWeb do
     end
   end
 
+  def browser_controller do
+    quote do
+      use Phoenix.Controller, formats: [:html, :json]
+
+      import Plug.Conn
+      import Phoenix.HTML
+
+      unquote(verified_routes())
+    end
+  end
+
+
+  def live_view do
+    quote do
+      use Phoenix.LiveView,
+        layout: {CuraWeb.Layouts, :root}
+
+      unquote(html_helpers())
+    end
+  end
+
+  def html do
+    quote do
+      use Phoenix.Component
+
+      # Import convenience functions from controllers
+      import Phoenix.Controller,
+        only: [get_csrf_token: 0, view_module: 1, view_template: 1]
+
+      # Include general helpers for rendering HTML
+      # unquote(html_helpers())
+    end
+  end
+
+  defp html_helpers do
+    quote do
+      # Translation
+      # use Gettext, backend: CuraWeb.Gettext
+
+      # HTML escaping functionality
+      import Phoenix.HTML
+
+      # Shortcut for generating JS commands
+      alias Phoenix.LiveView.JS
+      # import CuraWeb.Helpers
+
+      # Routes generation with the ~p sigil
+      unquote(verified_routes())
+    end
+  end
+
   def verified_routes do
     quote do
       use Phoenix.VerifiedRoutes,
