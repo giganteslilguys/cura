@@ -70,14 +70,26 @@ defmodule Cura.Peer do
   @opts [
     ice_servers: [
       %{urls: "stun:stun.l.google.com:19302"},
-      %{urls: "stun:stun1.l.google.com:19302"},
-      %{urls: "stun:stun2.l.google.com:19302"},
-      %{urls: "stun:stun3.l.google.com:19302"},
-      %{urls: "stun:stun4.l.google.com:19302"}
+      %{urls: "stun:stun1.l.google.com:19302"}
     ],
+    ice_ip_filter: &__MODULE__.ice_ip_filter/1,
     audio_codecs: @audio_codecs,
     video_codecs: @video_codecs
   ]
+
+  @doc false
+  # Restrict the host candidates ex_ice gathers to addresses that can
+  # actually be reached from the browser. Without this, in WSL2 (and
+  # most containerised environments) every loopback / link-local /
+  # secondary-loopback / IPv6 interface produces a candidate that the
+  # browser will only mark "failed" after ~30 s of STUN retransmits,
+  # which is what the user sees as a long "Connecting…" before media
+  # finally starts to flow on a usable pair.
+  def ice_ip_filter({127, _, _, _}), do: false
+  def ice_ip_filter({169, 254, _, _}), do: false
+  def ice_ip_filter({10, 255, 255, 254}), do: false
+  def ice_ip_filter({_, _, _, _}), do: true
+  def ice_ip_filter(_), do: false
 
   @spec start_link(term(), term()) :: GenServer.on_start()
   def start_link(args, opts) do
