@@ -42,6 +42,10 @@ _build/
 *.nix
 shell.nix
 
+# Envs
+.env
+.env.*
+
 # Audio Files
 *.mp3
 *.m4a

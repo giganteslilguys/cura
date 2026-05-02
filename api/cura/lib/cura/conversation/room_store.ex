@@ -27,29 +27,35 @@ defmodule Cura.Conversation.RoomStore do
         chunk_count: 0,
         started_at: now,
         last_triggered_at: nil,
-        gemini_call_order: 0
+        gemini_call_order: 0,
+        last_broadcast: nil
       })
 
-    updated = %{
-      room
-      | transcript: room.transcript <> " " <> text,
-        chunk_count: room.chunk_count + 1
-    }
+    if room.last_broadcast == text do
+      {:reply, :duplicate, rooms}
+    else
+      updated = %{
+        room
+        | transcript: room.transcript <> " " <> text,
+          chunk_count: room.chunk_count + 1,
+          last_broadcast: text
+      }
 
-    elapsed = DateTime.diff(now, updated.last_triggered_at || updated.started_at, :second)
-    should_trigger = updated.chunk_count >= @chunk_trigger or elapsed >= @time_trigger_seconds
+      elapsed = DateTime.diff(now, updated.last_triggered_at || updated.started_at, :second)
+      should_trigger = updated.chunk_count >= @chunk_trigger or elapsed >= @time_trigger_seconds
 
-    {final, result} =
-      if should_trigger do
-        order = updated.gemini_call_order + 1
+      {final, result} =
+        if should_trigger do
+          order = updated.gemini_call_order + 1
 
-        {%{updated | chunk_count: 0, last_triggered_at: now, gemini_call_order: order},
-         {:trigger, updated.transcript, order}}
-      else
-        {updated, :noop}
-      end
+          {%{updated | chunk_count: 0, last_triggered_at: now, gemini_call_order: order},
+           {:trigger, updated.transcript, order}}
+        else
+          {updated, :noop}
+        end
 
-    {:reply, result, Map.put(rooms, room_id, final)}
+      {:reply, result, Map.put(rooms, room_id, final)}
+    end
   end
 
   def handle_call({:get_context, room_id}, _from, rooms) do

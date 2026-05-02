@@ -2,12 +2,24 @@ defmodule Cura.Conversation.WhisperClient do
   require Logger
 
   @whisper_url "https://api.openai.com/v1/audio/transcriptions"
+  @model "gpt-4o-transcribe"
 
-  @base_prompt "Consulta médica entre médico e paciente."
+  @hallucinations [
+    "Bom dia, Sr. Silva. O que o traz aqui hoje?",
+    "Obrigado por assistir.",
+    "Até à próxima.",
+    "Inscreva-se no canal.",
+    "Legendas por",
+    "Transcrição por"
+  ]
 
-  def transcribe(audio_binary, prior_context \\ "")
+  @base_prompt "Transcrição de consulta médica em português europeu. " <>
+                 "Intervenientes: médico e paciente. " <>
+                 "Vocabulário esperado: sintomas, diagnósticos, medicamentos, exames, dores, tensão arterial, análises, receita, historial clínico."
 
-  def transcribe(audio_binary, prior_context)
+  def transcribe(audio_binary, _prior_context \\ "")
+
+  def transcribe(audio_binary, _prior_context)
       when is_binary(audio_binary) and byte_size(audio_binary) > 0 do
     api_key = Application.fetch_env!(:cura, :openai_api_key)
     tmp_path = Path.join(System.tmp_dir!(), "audio_#{System.unique_integer([:positive])}.webm")
@@ -15,12 +27,7 @@ defmodule Cura.Conversation.WhisperClient do
     File.write!(tmp_path, audio_binary)
     Logger.info("[Whisper] transcribing size=#{byte_size(audio_binary)}B")
 
-    prompt =
-      if prior_context != "" do
-        "#{@base_prompt} #{prior_context}"
-      else
-        @base_prompt
-      end
+    prompt = @base_prompt
 
     try do
       multipart =
@@ -28,9 +35,10 @@ defmodule Cura.Conversation.WhisperClient do
          [
            {:file, tmp_path, {"form-data", [name: "file", filename: "audio.webm"]},
             [{"Content-Type", "audio/webm"}]},
-           {"model", "gpt-4o-transcribe"},
+           {"model", @model},
            {"language", "pt"},
-           {"prompt", prompt}
+           {"prompt", prompt},
+           {"temperature", "0"}
          ]}
 
       headers = [{"Authorization", "Bearer #{api_key}"}]
@@ -39,7 +47,10 @@ defmodule Cura.Conversation.WhisperClient do
         {:ok, %{status_code: 200, body: body}} ->
           text = body |> Jason.decode!() |> Map.fetch!("text") |> String.trim()
 
-          if text == @base_prompt or text == "" do
+          hallucination? = Enum.any?(@hallucinations, &String.contains?(text, &1))
+
+          if text == "" or String.length(text) < 3 or hallucination? do
+            if hallucination?, do: Logger.info("[Whisper] dropped hallucination: #{text}")
             {:error, :empty_audio}
           else
             {:ok, text}

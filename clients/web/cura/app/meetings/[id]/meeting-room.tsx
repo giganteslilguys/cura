@@ -30,7 +30,7 @@ type SignalPayload = {
 
 type PresenceState = Record<string, { metas: Array<Record<string, unknown>> }>;
 
-type TranscriptEntry = { time: string; text: string };
+type TranscriptEntry = { time: string; text: string; speaker: "doctor" | "patient" };
 
 const MOCK_SUGGESTIONS = [
   { id: 1, text: "Consider asking about sleep quality — fatigue mentioned" },
@@ -202,11 +202,11 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       const convChannel = socket.channel(`conversation:${meeting.id}`);
       conversationChannelRef.current = convChannel;
 
-      convChannel.on("transcript_update", ({ text, timestamp }: { text: string; timestamp: string }) => {
+      convChannel.on("transcript_update", ({ text, speaker, timestamp }: { text: string; speaker: "doctor" | "patient"; timestamp: string }) => {
         if (cancelled) return;
         const date = new Date(timestamp);
         const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        setTranscript((prev) => [...prev, { time, text }]);
+        setTranscript((prev) => [...prev, { time, text, speaker }]);
       });
 
       convChannel.join();
@@ -214,7 +214,8 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       // Audio capture: record 15-second chunks and send to Whisper via conversation channel.
       // A VAD (voice activity detection) analyser gates each chunk — silent windows are
       // dropped before they reach the network, preventing Whisper hallucinations.
-      const SPEECH_THRESHOLD = 50;  // 0–255 frequency amplitude
+      const SPEECH_THRESHOLD = 80;  // 0–255 peak frequency amplitude
+      const SPEECH_FRAMES_REQUIRED = 2; // at least 2 × 100 ms = 200 ms of real speech
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";
@@ -235,15 +236,15 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         const rec = new MediaRecorder(audioStream, { mimeType });
         currentRecorder = rec;
 
-        let hadSpeech = false;
+        let speechFrames = 0;
         const vadInterval = setInterval(() => {
           analyser.getByteFrequencyData(freqData);
-          if (Math.max(...freqData) > SPEECH_THRESHOLD) hadSpeech = true;
+          if (Math.max(...freqData) > SPEECH_THRESHOLD) speechFrames++;
         }, 100);
 
         rec.ondataavailable = async (e) => {
           clearInterval(vadInterval);
-          if (!recorderActive || !hadSpeech || e.data.size < 500) return;
+          if (!recorderActive || speechFrames < SPEECH_FRAMES_REQUIRED || e.data.size < 500) return;
           const buffer = await e.data.arrayBuffer();
           const bytes = new Uint8Array(buffer);
           let binary = "";
@@ -253,7 +254,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
         rec.onstop = () => { if (recorderActive) cycleRecorder(); };
         rec.start();
-        setTimeout(() => { if (rec.state === "recording") rec.stop(); }, 5000);
+        setTimeout(() => { if (rec.state === "recording") rec.stop(); }, 4000);
       };
 
       cycleRecorder();
@@ -572,6 +573,9 @@ function DoctorMeetingRoom({
                   <div key={i} className="flex gap-3 text-xs">
                     <span className="text-stone-400 font-mono w-10 shrink-0 pt-px">
                       {entry.time}
+                    </span>
+                    <span className={`w-14 shrink-0 font-semibold pt-px ${entry.speaker === "doctor" ? "text-orange-500" : "text-blue-500"}`}>
+                      {entry.speaker === "doctor" ? "Médico" : "Paciente"}
                     </span>
                     <span className="text-stone-700 leading-relaxed">{entry.text}</span>
                   </div>

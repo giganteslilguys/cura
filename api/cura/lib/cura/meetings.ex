@@ -7,6 +7,7 @@ defmodule Cura.Meetings do
   alias Cura.Repo
 
   alias Cura.Meetings.Meeting
+  alias Cura.Meetings.TranscriptEntry
 
   def list_meetings do
     Repo.all(Meeting)
@@ -51,5 +52,19 @@ defmodule Cura.Meetings do
 
   def change_meeting(%Meeting{} = meeting, attrs \\ %{}) do
     Meeting.changeset(meeting, attrs)
+  end
+
+  def save_transcript_entry(meeting_id, speaker, text) do
+    %TranscriptEntry{}
+    |> TranscriptEntry.changeset(%{meeting_id: meeting_id, speaker: speaker, text: text})
+    |> Repo.insert()
+  end
+
+  def list_transcript_entries(meeting_id) do
+    Repo.all(
+      from e in TranscriptEntry,
+        where: e.meeting_id == ^meeting_id,
+        order_by: [asc: e.inserted_at]
+    )
   end
 end

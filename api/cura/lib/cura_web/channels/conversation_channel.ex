@@ -3,9 +3,9 @@ defmodule CuraWeb.ConversationChannel do
 
   require Logger
 
-  alias Cura.Conversation.GeminiClient
   alias Cura.Conversation.RoomStore
   alias Cura.Conversation.WhisperClient
+  alias Cura.Meetings
 
   @impl true
   def join("conversation:" <> room_id, _params, socket) do
@@ -16,33 +16,30 @@ defmodule CuraWeb.ConversationChannel do
   def handle_in("audio_chunk", %{"audio" => base64_audio}, socket) do
     room_id = socket.assigns.room_id
 
-    prior_context = RoomStore.get_context(room_id)
-
     with {:ok, audio_binary} <- Base.decode64(base64_audio),
-         {:ok, text} <- WhisperClient.transcribe(audio_binary, prior_context),
-         false <- text == socket.assigns[:last_transcript] do
-      Logger.info("[Channel] room=#{room_id} transcribed=\"#{text}\"")
-
-      broadcast!(socket, "transcript_update", %{
-        text: text,
-        timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
-      })
-
+         {:ok, text} <- WhisperClient.transcribe(audio_binary) do
       case RoomStore.append_chunk(room_id, text) do
-        {:trigger, transcript, order_id} ->
-          Logger.info("[Channel] room=#{room_id} triggering Gemini order=#{order_id}")
-          GeminiClient.call_async(transcript, room_id, order_id)
+        :duplicate ->
+          Logger.info("[Channel] room=#{room_id} duplicate transcript, skipping")
 
-        :noop ->
-          :ok
+        _ ->
+          speaker = socket.assigns.current_user.role
+          Logger.info("[Channel] room=#{room_id} speaker=#{speaker} transcribed=\"#{text}\"")
+
+          broadcast!(socket, "transcript_update", %{
+            text: text,
+            speaker: speaker,
+            timestamp: DateTime.utc_now() |> DateTime.to_iso8601()
+          })
+
+          case Meetings.save_transcript_entry(room_id, speaker, text) do
+            {:error, reason} -> Logger.error("[Channel] failed to save transcript entry: #{inspect(reason)}")
+            _ -> :ok
+          end
       end
 
-      {:noreply, assign(socket, :last_transcript, text)}
+      {:noreply, socket}
     else
-      true ->
-        Logger.info("[Channel] room=#{room_id} duplicate transcript, skipping")
-        {:noreply, socket}
-
       :error ->
         Logger.error("[ConversationChannel] room=#{room_id} invalid base64 audio")
         {:noreply, socket}
