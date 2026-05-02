@@ -126,6 +126,34 @@ defmodule Cura.Meetings.Meeting do
     cast(meeting, final_attrs, [:soap_note, :soap_note_submitted])
   end
 
+  def reschedule_changeset(meeting, attrs) do
+    meeting
+    |> cast(attrs, [:doctor_id, :date, :time])
+    |> validate_required([:doctor_id, :date, :time])
+    |> validate_date_not_before_original(meeting.date)
+    |> validate_future_date_time()
+    |> put_change(:reminder_24h_sent, false)
+    |> put_change(:reminder_1h_sent, false)
+    |> unique_constraint([:doctor_id, :date, :time],
+      name: :meetings_unique_datetime_per_doctor,
+      message: "A meeting is already scheduled for this doctor at this date and time"
+    )
+  end
+
+  defp validate_date_not_before_original(changeset, original_date) do
+    case get_field(changeset, :date) do
+      %Date{} = new_date when not is_nil(original_date) ->
+        if Date.compare(new_date, original_date) == :lt do
+          add_error(changeset, :date, "cannot be earlier than the original appointment date")
+        else
+          changeset
+        end
+
+      _ ->
+        changeset
+    end
+  end
+
   def intake_changeset(meeting, attrs) do
     intake = attrs["patient_intake"] || attrs[:patient_intake] || %{}
 

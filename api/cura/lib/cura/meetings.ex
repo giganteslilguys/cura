@@ -92,6 +92,48 @@ defmodule Cura.Meetings do
     end
   end
 
+  def reschedule_meeting(%Meeting{} = meeting, user_id, attrs) do
+    with :ok <- check_patient_owner(meeting, user_id),
+         :ok <- check_scheduled(meeting),
+         :ok <- check_not_on_site(meeting),
+         :ok <- check_reschedulable_window(meeting) do
+      meeting
+      |> Meeting.reschedule_changeset(attrs)
+      |> Repo.update()
+      |> case do
+        {:ok, updated} -> {:ok, Repo.preload(updated, [:doctor, patient: :patient_profile])}
+        error -> error
+      end
+    end
+  end
+
+  defp check_patient_owner(meeting, user_id) do
+    if meeting.patient_id == user_id, do: :ok, else: {:error, :unauthorized}
+  end
+
+  defp check_scheduled(meeting) do
+    if meeting.status == :scheduled, do: :ok, else: {:error, :not_reschedulable}
+  end
+
+  defp check_not_on_site(meeting) do
+    if meeting.kind != :on_site, do: :ok, else: {:error, :not_reschedulable}
+  end
+
+  defp check_reschedulable_window(meeting) do
+    if working_days_until(meeting.date) > 3, do: :ok, else: {:error, :not_reschedulable}
+  end
+
+  defp working_days_until(date) do
+    today = Date.utc_today()
+
+    if Date.compare(date, today) != :gt do
+      0
+    else
+      Date.range(today, Date.add(date, -1))
+      |> Enum.count(fn d -> Date.day_of_week(d) in 1..5 end)
+    end
+  end
+
   def update_meeting(%Meeting{} = meeting, attrs) do
     meeting
     |> Meeting.changeset(attrs)

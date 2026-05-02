@@ -36,6 +36,7 @@ defmodule CuraWeb.Router do
     patch "/meetings/:id/intake", MeetingController, :intake
     patch "/meetings/:id/notes", MeetingController, :update_notes
     patch "/meetings/:id/soap_note", MeetingController, :soap_note
+    patch "/meetings/:id/reschedule", MeetingController, :reschedule
     post "/meetings/:id/generate_soap", MeetingController, :generate_soap
 
     get "/doctors", BookingController, :list_doctors

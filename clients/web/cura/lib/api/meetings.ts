@@ -93,6 +93,18 @@ export function createOnSiteMeeting(
   });
 }
 
+export function rescheduleMeeting(
+  id: string,
+  body: { doctor_id: string; date: string; time: string },
+  token: string,
+): Promise<{ meeting: Meeting }> {
+  return apiFetch<{ meeting: Meeting }>(`/api/meetings/${id}/reschedule`, {
+    method: "PATCH",
+    body,
+    token,
+  });
+}
+
 /**
  * Marks the meeting as completed — used to end an on-site visit so the view
  * transitions into the post-meeting SOAP-note editor.

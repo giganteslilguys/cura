@@ -72,6 +72,29 @@ defmodule CuraWeb.Api.MeetingController do
     end
   end
 
+  def reschedule(conn, %{"id" => id} = params) do
+    user = conn.assigns.current_user
+
+    with {:ok, meeting} <- Meetings.get_meeting!(id),
+         {:ok, updated} <- Meetings.reschedule_meeting(meeting, user.id, params) do
+      render(conn, :show, meeting: updated)
+    else
+      {:error, :unauthorized} ->
+        {:error, :unauthorized}
+
+      {:error, :not_reschedulable} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "This meeting cannot be rescheduled."})
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, changeset}
+
+      error ->
+        error
+    end
+  end
+
   def on_site(conn, params) do
     user = conn.assigns.current_user
 

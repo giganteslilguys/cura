@@ -1,17 +1,40 @@
 import { ArrowRight, Calendar, CalendarPlus, Clock, FileText, Settings2, Timer, X } from 'lucide-react';
+import type { Meeting, User } from '@/lib/api/types';
 
 import Link from 'next/link';
 import { Nav } from '@/components/nav';
+import { StartOnSite } from './start-on-site';
 import { getCurrentUser } from '@/lib/auth/dal';
 import { getSessionToken } from '@/lib/auth/session';
 import { listMeetings } from '@/lib/api/meetings';
 import { redirect } from 'next/navigation';
-import type { Meeting, User } from '@/lib/api/types';
-import { StartOnSite } from './start-on-site';
 
 function isFuture(m: Meeting) {
   const dt = new Date(`${m.date}T${m.time}`);
   return dt.getTime() > Date.now();
+}
+
+function workingDaysUntil(dateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr);
+  target.setHours(0, 0, 0, 0);
+  let count = 0;
+  const cur = new Date(today);
+  while (cur < target) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
+function isReschedulable(m: Meeting): boolean {
+  return (
+    m.status === 'scheduled' &&
+    m.kind !== 'on_site' &&
+    workingDaysUntil(m.date) > 3
+  );
 }
 
 function fmtDate(d: string) {
@@ -77,13 +100,22 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
         </span>
       </div>
 
-      <div className="shrink-0">
+      <div className="shrink-0 flex flex-row-reverse items-center gap-2">
         {user.role === 'patient' && upcoming && (
           <Link
             href={`/meetings/${m.id}`}
             className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity"
           >
             Entrar <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        )}
+        {user.role === 'patient' && upcoming && isReschedulable(m) && (
+          <Link
+            href={`/meetings/${m.id}/reschedule`}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-medium transition-opacity hover:opacity-80"
+            style={{ background: 'rgba(0,0,0,0.04)', color: '#0f0a07', border: '1px solid rgba(0,0,0,0.08)' }}
+          >
+            Reagendar
           </Link>
         )}
         {user.role === 'patient' && !upcoming && !canceled && (
