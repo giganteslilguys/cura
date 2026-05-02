@@ -21,13 +21,9 @@ if System.get_env("PHX_SERVER") do
 end
 
 config :cura,
-       :gemini_api_key,
-       System.get_env("GEMINI_API_KEY") ||
-         raise("environment variable GEMINI_API_KEY is missing.")
-
-config :cura,
        :openai_api_key,
-       System.get_env("OPENAI_API_KEY") || ""
+       System.get_env("OPENAI_API_KEY") ||
+         raise("environment variable OPENAI_API_KEY is missing.")
 
 config :cura,
        :elevenlabs_api_key,

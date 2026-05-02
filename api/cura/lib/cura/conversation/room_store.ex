@@ -12,7 +12,7 @@ defmodule Cura.Conversation.RoomStore do
 
   @doc """
   Append newly-generated suggestions to the room's running list. Called by
-  the Gemini client after a successful response so the next trigger sees
+  the OpenAI client after a successful response so the next trigger sees
   them in the "already suggested" context.
   """
   def add_suggestions(room_id, suggestions) when is_list(suggestions) do
@@ -46,9 +46,9 @@ defmodule Cura.Conversation.RoomStore do
 
       {final, result} =
         if should_trigger do
-          order = updated.gemini_call_order + 1
+          order = updated.ai_call_order + 1
 
-          {%{updated | chunk_count: 0, last_triggered_at: now, gemini_call_order: order},
+          {%{updated | chunk_count: 0, last_triggered_at: now, ai_call_order: order},
            {:trigger, updated.transcript, updated.suggestions, order}}
         else
           {updated, :noop}
@@ -75,7 +75,7 @@ defmodule Cura.Conversation.RoomStore do
       chunk_count: 0,
       started_at: now,
       last_triggered_at: nil,
-      gemini_call_order: 0,
+      ai_call_order: 0,
       last_broadcast: nil,
       suggestions: []
     }

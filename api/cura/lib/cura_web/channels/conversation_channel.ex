@@ -3,7 +3,7 @@ defmodule CuraWeb.ConversationChannel do
 
   require Logger
 
-  alias Cura.Conversation.GeminiClient
+  alias Cura.Conversation.OpenAIClient
   alias Cura.Conversation.RoomStore
   alias Cura.Conversation.WhisperClient
   alias Cura.Meetings
@@ -43,8 +43,8 @@ defmodule CuraWeb.ConversationChannel do
 
           case result do
             {:trigger, transcript, prior_suggestions, order_id} ->
-              Logger.info("[Channel] room=#{room_id} triggering Gemini order=#{order_id}")
-              GeminiClient.suggest_async(room_id, transcript, prior_suggestions, order_id)
+              Logger.info("[Channel] room=#{room_id} triggering OpenAI order=#{order_id}")
+              OpenAIClient.suggest_async(room_id, transcript, prior_suggestions, order_id)
 
             :noop ->
               :ok
