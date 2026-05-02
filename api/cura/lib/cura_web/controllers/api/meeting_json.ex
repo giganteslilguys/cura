@@ -33,7 +33,8 @@ defmodule CuraWeb.Api.MeetingJSON do
       patient: user(meeting.patient),
       patient_intake: meeting.patient_intake,
       soap_note: meeting.soap_note,
-      soap_note_submitted: meeting.soap_note_submitted
+      soap_note_submitted: meeting.soap_note_submitted,
+      kind: meeting.kind
     }
   end
 

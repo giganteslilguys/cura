@@ -6,7 +6,7 @@ defmodule Cura.Meetings.Meeting do
   alias Cura.Accounts.User
 
   @required_fields ~w(title date time duration doctor_id patient_id)a
-  @optional_fields ~w(notes status timezone)a
+  @optional_fields ~w(notes status timezone kind)a
   @intake_fields ~w(reason symptoms notes)a
 
   schema "meetings" do
@@ -24,9 +24,14 @@ defmodule Cura.Meetings.Meeting do
       values: [:scheduled, :completed, :canceled, :rejected],
       default: :scheduled
 
+    field :kind, Ecto.Enum, values: [:video, :on_site], default: :video
+
     field :patient_intake, :map
     field :soap_note, :map
     field :soap_note_submitted, :boolean, default: false
+
+    field :reminder_24h_sent, :boolean, default: false
+    field :reminder_1h_sent,  :boolean, default: false
 
     timestamps()
   end
@@ -65,17 +70,19 @@ defmodule Cura.Meetings.Meeting do
 
     case {date, time} do
       {%Date{} = meeting_date, %Time{} = meeting_time} ->
-        meeting_datetime = DateTime.new!(meeting_date, meeting_time, timezone)
-        current_datetime = DateTime.utc_now()
+        meeting_naive = NaiveDateTime.new!(meeting_date, meeting_time)
+        current_naive = NaiveDateTime.utc_now()
 
-        if DateTime.compare(meeting_datetime, current_datetime) == :lt do
+        grace = NaiveDateTime.add(current_naive, -60, :second)
+
+        if NaiveDateTime.compare(meeting_naive, grace) == :lt do
           changeset
           |> add_error(:date, "Meeting cannot be scheduled in the past")
           |> add_error(:time, "Meeting time must be in the future")
         else
-          max_future_date = DateTime.add(current_datetime, 365, :day)
+          max_future = NaiveDateTime.add(current_naive, 365, :day)
 
-          if DateTime.compare(meeting_datetime, max_future_date) == :gt do
+          if NaiveDateTime.compare(meeting_naive, max_future) == :gt do
             add_error(changeset, :date, "Meeting cannot be scheduled more than 1 year in advance")
           else
             changeset

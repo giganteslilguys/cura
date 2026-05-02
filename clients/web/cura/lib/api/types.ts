@@ -103,6 +103,26 @@ export type TranscriptEntry = {
   timestamp: string;
 };
 
+export type DoctorSummary = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+};
+
+export type DoctorAvailability = {
+  id: string;
+  day_of_week: number; // 1=Mon … 7=Sun
+  start_time: string;  // "HH:MM:SS"
+  end_time: string;
+  slot_duration: number;
+};
+
+export type TimeSlot = {
+  time: string;    // "HH:MM:SS"
+  duration: number;
+};
+
 export type Meeting = {
   id: string;
   title: string;

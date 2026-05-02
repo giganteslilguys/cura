@@ -8,6 +8,7 @@ import {
   HeartPulse,
   ClipboardList,
   NotebookPen,
+  FolderOpen,
 } from 'lucide-react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -18,6 +19,8 @@ import { getCurrentUser } from '@/lib/auth/dal';
 import { getSessionToken } from '@/lib/auth/session';
 import type { Allergy, Medication } from '@/lib/api/types';
 import { NotesEditor } from './notes-editor';
+import { DocumentsPanel } from './documents-panel';
+import { listDocuments } from '@/lib/api/documents';
 
 export default async function PatientPage({
   params,
@@ -39,6 +42,7 @@ export default async function PatientPage({
   const patient = meeting.patient;
   const profile = patient.patient_profile;
   const intake = meeting.patient_intake;
+  const { documents } = await listDocuments(patient.id, token).catch(() => ({ documents: [] }));
 
   const fullName = `${patient.first_name} ${patient.last_name}`;
 
@@ -171,6 +175,18 @@ export default async function PatientPage({
               meetingId={id}
               token={token}
               initialNotes={meeting.notes ?? ''}
+            />
+          </Section>
+
+          {/* Documents */}
+          <Section
+            title="Documents"
+            icon={<FolderOpen className="w-4 h-4" />}
+          >
+            <DocumentsPanel
+              patientId={patient.id}
+              token={token}
+              initialDocuments={documents}
             />
           </Section>
 

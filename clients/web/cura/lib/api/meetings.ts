@@ -55,6 +55,13 @@ export function saveVisitSummary(
   });
 }
 
+export function generateSoapDraft(
+  id: string,
+  token: string,
+): Promise<{ soap_note: VisitSummary }> {
+  return apiFetch(`/api/meetings/${id}/generate_soap`, { method: "POST", token });
+}
+
 export function getMeetingTranscript(
   id: string,
   token: string,

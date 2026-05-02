@@ -51,12 +51,48 @@ defmodule CuraWeb.Api.MeetingController do
 
   def soap_note(conn, %{"id" => id} = params) do
     user = conn.assigns.current_user
+    submitting = params["submit"] == true
 
     with {:ok, meeting} <- Meetings.get_meeting!(id),
          :ok <- authorize_doctor(meeting, user.id),
          :ok <- check_not_submitted(meeting),
          {:ok, updated} <- Meetings.update_soap_note(meeting, params) do
+      if submitting, do: Cura.Emails.send_visit_summary(updated)
       render(conn, :show, meeting: updated)
+    end
+  end
+
+  def on_site(conn, params) do
+    user = conn.assigns.current_user
+
+    with true <- user.role == :doctor,
+         {:ok, meeting} <- Meetings.create_on_site_meeting(
+           user.id,
+           params["patient_email"],
+           params["title"]
+         ) do
+      conn |> put_status(:created) |> render(:show, meeting: meeting)
+    else
+      false -> {:error, :unauthorized}
+      {:error, :patient_not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "No patient found with that email."})
+      error -> error
+    end
+  end
+
+  def generate_soap(conn, %{"id" => id}) do
+    user = conn.assigns.current_user
+
+    with {:ok, meeting} <- Meetings.get_meeting!(id),
+         :ok <- authorize_doctor(meeting, user.id),
+         {:ok, note} <- Meetings.generate_soap_note(id) do
+      json(conn, %{soap_note: note})
+    else
+      {:error, :no_transcript} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "No transcript available yet."})
+      {:error, :parse_failed} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "Could not parse AI response."})
+      other -> other
     end
   end
 

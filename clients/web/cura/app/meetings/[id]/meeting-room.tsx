@@ -16,7 +16,7 @@ import type { Diagnosis, Meeting, Prescription, Suggestion, TranscriptEntry, Use
 import { RefObject, useEffect, useRef, useState } from 'react';
 
 import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
-import { completeMeeting, getMeeting, getMeetingTranscript, saveVisitSummary, submitMeetingIntake, updateMeetingNotes } from '@/lib/api/meetings';
+import { completeMeeting, generateSoapDraft, getMeeting, getMeetingTranscript, saveVisitSummary, submitMeetingIntake, updateMeetingNotes } from '@/lib/api/meetings';
 import { isSpeechFrame, MIN_CHUNK_BYTES, SPEECH_FRAMES_REQUIRED } from '@/lib/audio/vad';
 import { getOnSitePhase } from '@/lib/meeting/phase';
 import { useRouter } from 'next/navigation';
@@ -102,7 +102,10 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
   const otherParticipant = isDoctor ? meeting.patient : meeting.doctor;
 
   // Re-evaluate phase every 5 s so the view auto-transitions without a reload.
+  // On-site meetings are phase-controlled by status only (see getOnSitePhase),
+  // not by wall-clock, so we skip this poll for them.
   useEffect(() => {
+    if (meeting.kind === 'on_site') return;
     if (phase === 'post') return;
     const id = setInterval(() => {
       const next = getMeetingPhase(meeting);
@@ -117,6 +120,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
   useEffect(() => {
     if (phase !== 'active') return;
+    if (meeting.kind === 'on_site') return;
     let cancelled = false;
     let peerPresent = false;
     let didCall = false;
@@ -895,6 +899,7 @@ function DoctorPostMeetingView({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     getMeetingTranscript(meeting.id, token)
@@ -951,6 +956,31 @@ function DoctorPostMeetingView({
       setSaveError("Failed to save. Please try again.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setSaveError(null);
+    try {
+      const { soap_note: note } = await generateSoapDraft(meeting.id, token);
+      if (note.vitals) {
+        setBpInput(note.vitals.blood_pressure ?? "");
+        setHrInput(note.vitals.heart_rate ?? "");
+        setTempInput(note.vitals.temperature ?? "");
+        setWeightInput(note.vitals.weight ?? "");
+      }
+      if (note.diagnoses?.length) setDiagnoses(note.diagnoses);
+      if (note.clinical_assessment) setClinicalAssessment(note.clinical_assessment);
+      if (note.treatment_plan?.length) setTreatmentPlan(note.treatment_plan);
+      if (note.prescriptions?.length) setPrescriptions(note.prescriptions);
+      if (note.lab_orders?.length) setLabOrders(note.lab_orders);
+      if (note.follow_up_appointment) setFollowUp(note.follow_up_appointment);
+      if (note.when_to_seek_care?.length) setWhenToSeekCare(note.when_to_seek_care);
+    } catch {
+      setSaveError("Could not generate draft. Check that a transcript is available.");
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -1036,7 +1066,7 @@ function DoctorPostMeetingView({
             <div className="px-6 pt-5 pb-4 border-b border-stone-100 shrink-0">
               <div className="flex items-center gap-2">
                 <StethoscopeIcon className="w-4 h-4 text-orange-500 shrink-0" />
-                <h2 className="font-semibold text-stone-900">Visit Summary</h2>
+                <h2 className="font-semibold text-stone-900">Summary</h2>
               </div>
               {submitted && (
                 <p className="text-xs text-stone-400 mt-1 ml-6">This summary has been submitted and is read-only.</p>
@@ -1248,17 +1278,25 @@ function DoctorPostMeetingView({
             {!submitted && (
               <div className="px-6 py-4 border-t border-stone-100 shrink-0">
                 {saveError && <p className="text-sm text-red-500 mb-3">{saveError}</p>}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={handleGenerate}
+                    disabled={generating || saving}
+                    className="flex items-center gap-1.5 px-5 py-2.5 border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-40 disabled:cursor-not-allowed rounded-full text-sm font-medium transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {generating ? "Generating…" : "Generate draft"}
+                  </button>
                   <button
                     onClick={() => handleSave(false)}
-                    disabled={saving}
+                    disabled={saving || generating}
                     className="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed text-stone-700 rounded-full text-sm font-medium transition-colors"
                   >
                     {saving ? "Saving…" : "Save draft"}
                   </button>
                   <button
                     onClick={() => handleSave(true)}
-                    disabled={saving}
+                    disabled={saving || generating}
                     className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full text-sm font-semibold transition-colors"
                   >
                     Submit & finalize

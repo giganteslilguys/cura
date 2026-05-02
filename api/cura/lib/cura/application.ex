@@ -15,6 +15,7 @@ defmodule Cura.Application do
       CuraWeb.Presence,
       Cura.Conversation.RoomStore,
       Cura.Conversation.Semaphore,
+      Cura.ReminderScheduler,
       CuraWeb.Endpoint
     ]
 
