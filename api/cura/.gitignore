@@ -45,3 +45,5 @@ shell.nix
 # Audio Files
 *.mp3
 *.m4a
+
+*.env

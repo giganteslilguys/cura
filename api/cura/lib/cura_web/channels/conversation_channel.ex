@@ -15,12 +15,11 @@ defmodule CuraWeb.ConversationChannel do
   @impl true
   def handle_in("audio_chunk", %{"audio" => base64_audio}, socket) do
     room_id = socket.assigns.room_id
-
-    prior_context = RoomStore.get_context(room_id)
+    recent = socket.assigns[:recent_transcripts] || []
 
     with {:ok, audio_binary} <- Base.decode64(base64_audio),
-         {:ok, text} <- WhisperClient.transcribe(audio_binary, prior_context),
-         false <- text == socket.assigns[:last_transcript] do
+         {:ok, text} <- WhisperClient.transcribe(audio_binary),
+         false <- text in recent do
       Logger.info("[Channel] room=#{room_id} transcribed=\"#{text}\"")
 
       broadcast!(socket, "transcript_update", %{
@@ -37,7 +36,7 @@ defmodule CuraWeb.ConversationChannel do
           :ok
       end
 
-      {:noreply, assign(socket, :last_transcript, text)}
+      {:noreply, assign(socket, :recent_transcripts, Enum.take([text | recent], 5))}
     else
       true ->
         Logger.info("[Channel] room=#{room_id} duplicate transcript, skipping")
