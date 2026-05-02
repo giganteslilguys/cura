@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, RefObject } from "react";
 import { Channel, Socket } from "phoenix";
 
 import { PUBLIC_SOCKET_URL } from "@/lib/api/config";
@@ -30,6 +30,20 @@ type SignalPayload = {
 
 type PresenceState = Record<string, { metas: Array<Record<string, unknown>> }>;
 
+const MOCK_SUGGESTIONS = [
+  { id: 1, text: "Consider asking about sleep quality — fatigue mentioned" },
+  { id: 2, text: "Confirm medication adherence" },
+  { id: 3, text: "BP slightly elevated — discuss stress levels" },
+];
+
+const MOCK_TRANSCRIPT = [
+  { time: "13:58", speaker: "Dr.", text: "How about your sleep? Are you getting enough rest at night?" },
+  { time: "14:05", speaker: "Pt.", text: "I think so, about 7 hours most nights." },
+  { time: "14:12", speaker: "Dr.", text: "And are you still taking your medications regularly?" },
+  { time: "14:18", speaker: "Pt.", text: "Yes, every morning with breakfast. Haven't missed any doses." },
+  { time: "14:28", speaker: "Dr.", text: "That's good. Let's talk about stress — anything new at work or home?" },
+];
+
 export function MeetingRoom({ meeting, currentUser, token }: Props) {
   const router = useRouter();
 
@@ -46,8 +60,8 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
   const [connState, setConnState] = useState<ConnState>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const otherParticipant =
-    currentUser.id === meeting.doctor?.id ? meeting.patient : meeting.doctor;
+  const isDoctor = currentUser.role === "doctor";
+  const otherParticipant = isDoctor ? meeting.patient : meeting.doctor;
 
   // Deterministic caller: lower user id makes the offer, the other side
   // answers. No glare possible, no perfect-negotiation choreography needed.
@@ -57,7 +71,95 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
     let cancelled = false;
     let peerPresent = false;
     let didCall = false;
-    const pendingCandidates: RTCIceCandidateInit[] = [];
+    let pendingCandidates: RTCIceCandidateInit[] = [];
+
+    // Creates a fresh RTCPeerConnection wired to the local stream and the
+    // shared refs/callbacks. Called once at startup and again whenever the
+    // remote peer leaves so the next offer arrives into a clean PC with no
+    // stale ICE credentials.
+    const makePc = (stream: MediaStream) => {
+      pcRef.current?.close();
+      const pc = new RTCPeerConnection(PC_CONFIG);
+      pcRef.current = pc;
+      for (const track of stream.getTracks()) pc.addTrack(track, stream);
+
+      pc.ontrack = (event) => {
+        const [remote] = event.streams;
+        if (remote && remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remote;
+        }
+      };
+
+      pc.onicecandidate = ({ candidate }) => {
+        if (!candidate) return;
+        channelRef.current?.push("signal", { candidate: candidate.toJSON() });
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (cancelled) return;
+        switch (pc.connectionState) {
+          case "connected":
+            setConnState("connected");
+            break;
+          case "connecting":
+            setConnState("connecting");
+            break;
+          case "failed":
+            setConnState("failed");
+            if (isCaller) pc.restartIce();
+            break;
+        }
+      };
+
+      // When restartIce() is called it fires negotiationneeded. The caller
+      // must create a new offer with the ICE restart flag so the remote peer
+      // learns the new ufrag; otherwise every incoming candidate is rejected.
+      pc.onnegotiationneeded = async () => {
+        if (!isCaller || !peerPresent || cancelled) return;
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          channelRef.current?.push("signal", { description: pc.localDescription });
+        } catch (err) {
+          console.error("onnegotiationneeded offer failed:", err);
+        }
+      };
+    };
+
+    const drainPendingCandidates = async () => {
+      const pc = pcRef.current;
+      if (!pc) return;
+      while (pendingCandidates.length) {
+        const c = pendingCandidates.shift()!;
+        try {
+          await pc.addIceCandidate(c);
+        } catch (err) {
+          console.error("addIceCandidate (drain) failed:", err);
+        }
+      }
+    };
+
+    const callIfReady = async () => {
+      const pc = pcRef.current;
+      if (!peerPresent || didCall || !isCaller || !pc) return;
+      didCall = true;
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        channelRef.current?.push("signal", { description: pc.localDescription });
+      } catch (err) {
+        console.error("createOffer failed:", err);
+      }
+    };
+
+    const resetPeer = (stream: MediaStream) => {
+      peerPresent = false;
+      didCall = false;
+      pendingCandidates = [];
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+      setConnState("waiting");
+      makePc(stream);
+    };
 
     const start = async () => {
       setConnState("waiting");
@@ -86,64 +188,8 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-      // 2. peer connection — tracks attached up-front so the SDP shape is
-      // identical on both sides regardless of who calls first.
-      const pc = new RTCPeerConnection(PC_CONFIG);
-      pcRef.current = pc;
-      for (const track of stream.getTracks()) pc.addTrack(track, stream);
-
-      pc.ontrack = (event) => {
-        const [remote] = event.streams;
-        if (remote && remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remote;
-        }
-      };
-
-      pc.onicecandidate = ({ candidate }) => {
-        if (!candidate) return;
-        channelRef.current?.push("signal", { candidate: candidate.toJSON() });
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (cancelled) return;
-        switch (pc.connectionState) {
-          case "connected":
-            setConnState("connected");
-            break;
-          case "connecting":
-            setConnState("connecting");
-            break;
-          case "failed":
-            setConnState("failed");
-            pc.restartIce();
-            break;
-        }
-      };
-
-      const drainPendingCandidates = async () => {
-        while (pendingCandidates.length) {
-          const c = pendingCandidates.shift()!;
-          try {
-            await pc.addIceCandidate(c);
-          } catch (err) {
-            console.error("addIceCandidate (drain) failed:", err);
-          }
-        }
-      };
-
-      const callIfReady = async () => {
-        if (!peerPresent || didCall || !isCaller) return;
-        didCall = true;
-        try {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          channelRef.current?.push("signal", {
-            description: pc.localDescription,
-          });
-        } catch (err) {
-          console.error("createOffer failed:", err);
-        }
-      };
+      // 2. initial peer connection
+      makePc(stream);
 
       // 3. signaling channel
       const socket = new Socket(`${PUBLIC_SOCKET_URL}/socket`, {
@@ -161,9 +207,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
           peerPresent = true;
           callIfReady();
         } else if (others.length === 0 && peerPresent) {
-          peerPresent = false;
-          didCall = false;
-          if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+          resetPeer(stream);
         }
       };
 
@@ -172,17 +216,15 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       channel.on(
         "presence_diff",
         (diff: { joins: PresenceState; leaves: PresenceState }) => {
+          for (const id of Object.keys(diff.leaves)) {
+            if (id !== currentUser.id && peerPresent) {
+              resetPeer(stream);
+            }
+          }
           for (const id of Object.keys(diff.joins)) {
             if (id !== currentUser.id && !peerPresent) {
               peerPresent = true;
               callIfReady();
-            }
-          }
-          for (const id of Object.keys(diff.leaves)) {
-            if (id !== currentUser.id) {
-              peerPresent = false;
-              didCall = false;
-              if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
             }
           }
         },
@@ -190,6 +232,8 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
       channel.on("signal", async (payload: SignalPayload) => {
         if (payload.from === currentUser.id) return;
+        const pc = pcRef.current;
+        if (!pc) return;
         try {
           if (payload.description) {
             await pc.setRemoteDescription(payload.description);
@@ -253,87 +297,431 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
   const endCall = () => router.push("/meetings");
 
-  const status =
-    {
-      idle: "Starting…",
-      waiting: "Waiting for the other participant…",
-      connecting: "Connecting…",
-      connected: "Connected",
-      failed: "Connection failed",
-    }[connState] ?? "";
+  if (isDoctor) {
+    return (
+      <DoctorMeetingRoom
+        meeting={meeting}
+        patient={meeting.patient}
+        localVideoRef={localVideoRef}
+        remoteVideoRef={remoteVideoRef}
+        connState={connState}
+        muted={muted}
+        videoOff={videoOff}
+        error={error}
+        onToggleMute={toggleMute}
+        onToggleVideo={toggleVideo}
+        onEndCall={endCall}
+      />
+    );
+  }
 
   return (
-    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-        <div className="flex flex-col">
-          <h1 className="font-semibold">{meeting.title}</h1>
-          <span className="text-xs text-zinc-400">{status}</span>
+    <PatientMeetingRoom
+      doctor={meeting.doctor}
+      localVideoRef={localVideoRef}
+      remoteVideoRef={remoteVideoRef}
+      connState={connState}
+      muted={muted}
+      videoOff={videoOff}
+      error={error}
+      onToggleMute={toggleMute}
+      onToggleVideo={toggleVideo}
+      onEndCall={endCall}
+    />
+  );
+}
+
+function DoctorMeetingRoom({
+  meeting,
+  patient,
+  localVideoRef,
+  remoteVideoRef,
+  connState,
+  muted,
+  videoOff,
+  error,
+  onToggleMute,
+  onToggleVideo,
+  onEndCall,
+}: {
+  meeting: Meeting;
+  patient: User | null;
+  localVideoRef: RefObject<HTMLVideoElement | null>;
+  remoteVideoRef: RefObject<HTMLVideoElement | null>;
+  connState: ConnState;
+  muted: boolean;
+  videoOff: boolean;
+  error: string | null;
+  onToggleMute: () => void;
+  onToggleVideo: () => void;
+  onEndCall: () => void;
+}) {
+  const [doneSuggestions, setDoneSuggestions] = useState<Set<number>>(new Set());
+  const [viewMode, setViewMode] = useState<"doctor" | "patient">("doctor");
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+
+  useEffect(() => {
+    if (connState !== "connected") return;
+    const timer = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [connState]);
+
+  const formatRecording = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  const toggleSuggestion = (id: number) => {
+    setDoneSuggestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const patientName = patient
+    ? `${patient.first_name} ${patient.last_name}`
+    : "Patient";
+
+  const isPatientMain = viewMode === "patient";
+
+  return (
+    <div className="flex flex-col h-screen bg-stone-100 text-stone-900">
+      {/* Header */}
+      <header className="flex items-center gap-4 px-6 py-3 bg-white border-b border-stone-200 shrink-0">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shrink-0">
+            <PersonIcon className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-stone-900 truncate">{patientName}</p>
+            <p className="text-xs text-stone-400 truncate">{meeting.title}</p>
+          </div>
+          <button className="flex items-center gap-0.5 text-orange-600 text-sm font-medium shrink-0 ml-2 hover:text-orange-700 transition-colors">
+            Full chart
+            <ChevronRightIcon className="w-4 h-4" />
+          </button>
         </div>
-        {otherParticipant && (
-          <span className="text-sm text-zinc-400">
-            with {otherParticipant.first_name} {otherParticipant.last_name}
-          </span>
-        )}
+        <div className="flex items-center gap-4 shrink-0">
+          <span className="text-xs text-stone-400">HIPAA-compliant • Encrypted</span>
+          <button
+            onClick={onEndCall}
+            className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors"
+          >
+            End visit
+          </button>
+        </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
-        <Tile label={`${currentUser.first_name} (you)`} muted={muted} videoOff={videoOff}>
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full h-full object-cover bg-black"
-          />
-        </Tile>
+      {/* Main */}
+      <div className="flex flex-1 gap-4 p-4 overflow-hidden">
+        {/* Left: Video + Transcript */}
+        <div className="flex flex-col flex-1 gap-3 min-w-0 overflow-hidden">
+          {/* Video area */}
+          <div className="relative flex-1 rounded-xl overflow-hidden bg-[#2a1200] min-h-0">
 
-        <Tile
-          label={
-            otherParticipant
-              ? `${otherParticipant.first_name} ${otherParticipant.last_name}`
-              : "Participant"
-          }
-          waiting={connState !== "connected"}
-        >
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className="w-full h-full object-cover bg-black"
-          />
-        </Tile>
-      </main>
+            {/* Remote video (patient when in doctor view, self when in patient-perspective view) */}
+            <video
+              ref={isPatientMain ? localVideoRef : remoteVideoRef}
+              autoPlay
+              muted={isPatientMain}
+              playsInline
+              className="w-full h-full object-cover"
+            />
+
+            {/* Patient placeholder when not connected */}
+            {connState !== "connected" && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
+                <div className="w-20 h-20 rounded-full bg-orange-600 flex items-center justify-center">
+                  <CameraIcon className="w-9 h-9 text-white" />
+                </div>
+                <span className="text-white text-sm font-medium">{patientName}</span>
+              </div>
+            )}
+
+            {/* Controls */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10">
+              <button
+                onClick={onToggleMute}
+                aria-label={muted ? "Unmute" : "Mute"}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+                  muted
+                    ? "bg-orange-600 text-white"
+                    : "bg-white/20 hover:bg-white/30 text-white"
+                }`}
+              >
+                {muted ? (
+                  <MicOffIcon className="w-5 h-5" />
+                ) : (
+                  <MicIcon className="w-5 h-5" />
+                )}
+              </button>
+              <button
+                onClick={onToggleVideo}
+                aria-label={videoOff ? "Turn camera on" : "Turn camera off"}
+                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+                  videoOff
+                    ? "bg-orange-600 text-white"
+                    : "bg-white/20 hover:bg-white/30 text-white"
+                }`}
+              >
+                {videoOff ? (
+                  <CameraOffIcon className="w-5 h-5" />
+                ) : (
+                  <CameraIcon className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+
+            {/* Doctor PiP (self view in bottom-right) */}
+            <div className="absolute bottom-3 right-3 w-28 h-20 rounded-xl overflow-hidden bg-stone-800 border border-stone-600/50 z-10">
+              <video
+                ref={isPatientMain ? remoteVideoRef : localVideoRef}
+                autoPlay
+                muted={!isPatientMain}
+                playsInline
+                className={`w-full h-full object-cover${!isPatientMain ? " scale-x-[-1]" : ""}`}
+              />
+              {!isPatientMain && videoOff && (
+                <div className="absolute inset-0 flex items-center justify-center bg-stone-800">
+                  <CameraOffIcon className="w-5 h-5 text-stone-400" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Transcript */}
+          <div className="bg-white rounded-xl border border-stone-200 px-4 pt-3 pb-4 shrink-0">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold tracking-widest text-stone-500 uppercase">
+                Live Transcript
+              </span>
+              <span className="text-xs text-stone-400">Last 5 exchanges</span>
+            </div>
+            <div className="space-y-1.5">
+              {MOCK_TRANSCRIPT.map((entry, i) => (
+                <div key={i} className="flex gap-3 text-xs">
+                  <span className="text-stone-400 font-mono w-10 shrink-0 pt-px">
+                    {entry.time}
+                  </span>
+                  <span className="text-stone-500 w-6 shrink-0 font-medium pt-px">
+                    {entry.speaker}
+                  </span>
+                  <span className="text-stone-700 leading-relaxed">{entry.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: AI Suggestions */}
+        <aside className="w-72 shrink-0 flex flex-col gap-3 overflow-hidden">
+          <div className="flex-1 bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-4 overflow-y-auto">
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <SparkleIcon className="w-4 h-4 text-orange-500 shrink-0" />
+                <h2 className="font-semibold text-stone-900 text-sm">AI Suggestions</h2>
+              </div>
+              <p className="text-xs text-stone-400 ml-6">Real-time guidance during your visit</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {MOCK_SUGGESTIONS.map((suggestion) => (
+                <div
+                  key={suggestion.id}
+                  className={`p-3 rounded-xl border transition-opacity ${
+                    doneSuggestions.has(suggestion.id)
+                      ? "opacity-40 bg-stone-50 border-stone-100"
+                      : "bg-stone-50 border-stone-100"
+                  }`}
+                >
+                  <div className="flex items-start gap-2 mb-2.5">
+                    <SparkleIcon className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
+                    <p className="text-xs text-stone-700 leading-relaxed">{suggestion.text}</p>
+                  </div>
+                  <div className="flex gap-4 pl-5">
+                    <button
+                      onClick={() => toggleSuggestion(suggestion.id)}
+                      className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors"
+                    >
+                      <CheckIcon className="w-3 h-3" />
+                      Done
+                    </button>
+                    <button className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors">
+                      <ChevronRightIcon className="w-3 h-3" />
+                      More
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button className="w-full py-3 px-4 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors text-left shrink-0">
+            View draft SOAP note (73% complete)
+          </button>
+        </aside>
+      </div>
 
       {error && (
-        <div className="px-6 py-3 bg-red-900/40 border-t border-red-800 text-sm">
+        <div className="px-6 py-3 bg-red-900/40 border-t border-red-800 text-sm text-red-200">
           {error}
         </div>
       )}
+    </div>
+  );
+}
 
-      <footer className="flex items-center justify-center gap-3 px-6 py-4 border-t border-zinc-800">
-        <button
-          onClick={toggleMute}
-          className={`px-4 py-2 rounded-md text-sm font-medium ${
-            muted ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-100"
-          }`}
-        >
-          {muted ? "Unmute" : "Mute"}
-        </button>
-        <button
-          onClick={toggleVideo}
-          className={`px-4 py-2 rounded-md text-sm font-medium ${
-            videoOff ? "bg-red-600 text-white" : "bg-zinc-800 text-zinc-100"
-          }`}
-        >
-          {videoOff ? "Camera on" : "Camera off"}
-        </button>
-        <button
-          onClick={endCall}
-          className="px-4 py-2 rounded-md bg-red-700 text-white text-sm font-medium"
-        >
-          Leave
-        </button>
-      </footer>
+function PatientMeetingRoom({
+  doctor,
+  localVideoRef,
+  remoteVideoRef,
+  connState,
+  muted,
+  videoOff,
+  error,
+  onToggleMute,
+  onToggleVideo,
+  onEndCall,
+}: {
+  doctor: User | null;
+  localVideoRef: RefObject<HTMLVideoElement | null>;
+  remoteVideoRef: RefObject<HTMLVideoElement | null>;
+  connState: ConnState;
+  muted: boolean;
+  videoOff: boolean;
+  error: string | null;
+  onToggleMute: () => void;
+  onToggleVideo: () => void;
+  onEndCall: () => void;
+}) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [viewMode, setViewMode] = useState<"doctor" | "patient">("patient");
+
+  useEffect(() => {
+    if (connState !== "connected") return;
+    const timer = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [connState]);
+
+  const formatElapsed = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
+  const doctorName = doctor
+    ? `Dr. ${doctor.first_name} ${doctor.last_name}`
+    : "Doctor";
+
+  const isConnected = connState === "connected";
+
+  return (
+    <div className="relative flex flex-col h-screen bg-[#2a1200] text-white overflow-hidden">
+      {/* Remote (doctor) video fills the screen */}
+      <video
+        ref={remoteVideoRef}
+        autoPlay
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+
+      {/* Doctor placeholder when not connected */}
+      {!isConnected && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
+          <div className="w-20 h-20 rounded-full bg-orange-600 flex items-center justify-center">
+            <CameraIcon className="w-9 h-9 text-white" />
+          </div>
+          <span className="text-white text-sm font-medium">{doctorName}</span>
+        </div>
+      )}
+
+      {/* Top bar */}
+      <div className="relative z-10 flex items-center justify-between px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-white text-sm">Cura</span>
+          <span
+            className={`w-2 h-2 rounded-full ${
+              isConnected ? "bg-green-400" : "bg-stone-400"
+            }`}
+          />
+          <span className="text-white/70 text-xs">
+            {isConnected
+              ? `Connected with ${doctorName}`
+              : connState === "waiting"
+              ? "Waiting for doctor…"
+              : "Connecting…"}
+          </span>
+        </div>
+        {isConnected && (
+          <span className="text-white/60 text-xs tabular-nums">
+            {formatElapsed(elapsedSeconds)} elapsed
+          </span>
+        )}
+      </div>
+
+      {/* Transcription notice */}
+      <div className="relative z-10 flex justify-center px-8 mt-2">
+        <p className="text-white/50 text-xs italic text-center">
+          This conversation is being securely transcribed to help your doctor focus on you.
+        </p>
+      </div>
+
+      {/* Self-view PiP */}
+      <div className="absolute bottom-24 right-4 z-10 w-28 h-20 rounded-xl overflow-hidden bg-stone-800 border border-stone-600/50">
+        <video
+          ref={localVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-full h-full object-cover scale-x-[-1]"
+        />
+        {videoOff && (
+          <div className="absolute inset-0 flex items-center justify-center bg-stone-800">
+            <CameraOffIcon className="w-5 h-5 text-stone-400" />
+          </div>
+        )}
+      </div>
+
+      {/* Controls + view toggle */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
+        <div className="flex items-center gap-3 bg-black/50 backdrop-blur-sm rounded-full px-4 py-3">
+          <button
+            onClick={onToggleMute}
+            aria-label={muted ? "Unmute" : "Mute"}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+              muted ? "bg-orange-600 text-white" : "bg-white/20 hover:bg-white/30 text-white"
+            }`}
+          >
+            {muted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
+          </button>
+          <button
+            onClick={onToggleVideo}
+            aria-label={videoOff ? "Turn camera on" : "Turn camera off"}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+              videoOff ? "bg-orange-600 text-white" : "bg-white/20 hover:bg-white/30 text-white"
+            }`}
+          >
+            {videoOff ? <CameraOffIcon className="w-5 h-5" /> : <CameraIcon className="w-5 h-5" />}
+          </button>
+
+          <button
+            onClick={onEndCall}
+            aria-label="Leave"
+            className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white transition-colors"
+          >
+            <PhoneOffIcon className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 px-6 py-3 bg-red-900/80 text-sm text-red-200">
+          {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -364,5 +752,116 @@ function Tile({
         {muted && <span className="ml-2 text-red-400">muted</span>}
       </div>
     </div>
+  );
+}
+
+// ── Icons ────────────────────────────────────────────────────────────────────
+
+function PersonIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+    </svg>
+  );
+}
+
+function MicIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0014 0M12 19v3M9 22h6" />
+    </svg>
+  );
+}
+
+function MicOffIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="22" y2="22" />
+      <path d="M18.89 13.23A7 7 0 0019 12M5 10a7 7 0 0012.66 4.13M15 9.34V4a3 3 0 00-5.68-1.33M9 9v3a3 3 0 005.12 2.12" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="9" y1="22" x2="15" y2="22" />
+    </svg>
+  );
+}
+
+function CameraIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 7l-7 5 7 5V7z" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+  );
+}
+
+function CameraOffIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="2" x2="22" y2="22" />
+      <path d="M9 9H1v10a2 2 0 002 2h12a2 2 0 001.73-1M16 5a2 2 0 00-2-2H6.73M23 7l-7 5 7 5V7z" />
+    </svg>
+  );
+}
+
+function ScreenShareIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <polyline points="8 21 12 17 16 21" />
+      <line x1="12" y1="17" x2="12" y2="21" />
+    </svg>
+  );
+}
+
+function LinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function SparkleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4L12 2z" />
+    </svg>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function StethoscopeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 2v5a5 5 0 0010 0V2" />
+      <path d="M12 12v4" />
+      <circle cx="12" cy="18" r="2" />
+      <path d="M6 2h2M16 2h2" />
+    </svg>
+  );
+}
+
+function PhoneOffIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.68 13.31a16 16 0 003.01 3.01l1.6-1.6a2 2 0 012.05-.45c1.13.4 2.35.62 3.61.62a2 2 0 012 2V21a2 2 0 01-2 2A18 18 0 013 5a2 2 0 012-2h3.5a2 2 0 012 2c0 1.26.22 2.48.62 3.61a2 2 0 01-.45 2.05l-1.6 1.6z" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
   );
 }
