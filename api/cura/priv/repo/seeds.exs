@@ -4,3 +4,4 @@
 
 Code.require_file("seeds/users.exs", __DIR__)
 Code.require_file("seeds/meetings.exs", __DIR__)
+Code.require_file("seeds/documents.exs", __DIR__)
