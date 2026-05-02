@@ -10,10 +10,6 @@ defmodule Cura.Conversation.RoomStore do
     GenServer.call(__MODULE__, {:append_chunk, room_id, text})
   end
 
-  def get_context(room_id) do
-    GenServer.call(__MODULE__, {:get_context, room_id})
-  end
-
   @impl true
   def init(state), do: {:ok, state}
 
@@ -56,11 +52,5 @@ defmodule Cura.Conversation.RoomStore do
 
       {:reply, result, Map.put(rooms, room_id, final)}
     end
-  end
-
-  def handle_call({:get_context, room_id}, _from, rooms) do
-    transcript = rooms |> Map.get(room_id, %{transcript: ""}) |> Map.get(:transcript)
-    context = transcript |> String.split(" ") |> Enum.take(-50) |> Enum.join(" ")
-    {:reply, context, rooms}
   end
 end

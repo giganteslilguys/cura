@@ -422,12 +422,18 @@ function DoctorMeetingRoom({
   const [doneSuggestions, setDoneSuggestions] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<"doctor" | "patient">("doctor");
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (connState !== "connected") return;
     const timer = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
     return () => clearInterval(timer);
   }, [connState]);
+
+  useEffect(() => {
+    const el = transcriptScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [transcript]);
 
   const formatRecording = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, "0");
@@ -556,7 +562,10 @@ function DoctorMeetingRoom({
           </div>
 
           {/* Transcript */}
-          <div className="bg-white rounded-xl border border-stone-200 px-4 pt-3 pb-4 shrink-0 max-h-48 overflow-y-auto">
+          <div
+            ref={transcriptScrollRef}
+            className="bg-white rounded-xl border border-stone-200 px-4 pt-3 pb-4 shrink-0 max-h-48 overflow-y-auto"
+          >
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold tracking-widest text-stone-500 uppercase">
                 Live Transcript
