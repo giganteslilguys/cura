@@ -12,6 +12,8 @@ defmodule Cura.Accounts.User do
     field :password, :string, virtual: true, redact: true
     field :hashed_password, :string, redact: true
 
+    has_one :patient_profile, Cura.Accounts.PatientProfile
+
     timestamps(type: :utc_datetime)
   end
 

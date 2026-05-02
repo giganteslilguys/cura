@@ -69,5 +69,5 @@ defmodule Cura.Conversation.WhisperClient do
     end
   end
 
-  def transcribe(_), do: {:error, :empty_audio}
+  def transcribe(_, _), do: {:error, :empty_audio}
 end

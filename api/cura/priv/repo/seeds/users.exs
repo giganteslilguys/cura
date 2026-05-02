@@ -4,6 +4,48 @@ defmodule Cura.Repo.Seeds.Accounts do
   @first_names File.read!("priv/fake/first_names.txt") |> String.split("\n", trim: true)
   @last_names File.read!("priv/fake/last_names.txt") |> String.split("\n", trim: true)
 
+  @sexes [:male, :female, :other]
+
+  @medications [
+    %{name: "Lisinopril", dose: "10mg", frequency: "daily"},
+    %{name: "Metformin", dose: "500mg", frequency: "twice daily"},
+    %{name: "Atorvastatin", dose: "20mg", frequency: "daily at night"},
+    %{name: "Levothyroxine", dose: "50mcg", frequency: "daily before breakfast"},
+    %{name: "Amlodipine", dose: "5mg", frequency: "daily"},
+    %{name: "Omeprazole", dose: "20mg", frequency: "daily"},
+    %{name: "Salbutamol", dose: "100mcg", frequency: "as needed"},
+    %{name: "Sertraline", dose: "50mg", frequency: "daily"},
+    %{name: "Ibuprofen", dose: "400mg", frequency: "as needed"},
+    %{name: "Warfarin", dose: "5mg", frequency: "daily"}
+  ]
+
+  @allergies [
+    %{substance: "Penicillin", severity: :moderate},
+    %{substance: "Peanuts", severity: :severe},
+    %{substance: "Latex", severity: :mild},
+    %{substance: "Shellfish", severity: :severe},
+    %{substance: "Aspirin", severity: :moderate},
+    %{substance: "Sulfa drugs", severity: :moderate},
+    %{substance: "Pollen", severity: :mild},
+    %{substance: "Dust mites", severity: :mild},
+    %{substance: "Iodine", severity: :severe}
+  ]
+
+  @conditions [
+    "Hypertension",
+    "Type 2 Diabetes",
+    "Asthma",
+    "Hypothyroidism",
+    "Hyperlipidemia",
+    "Osteoarthritis",
+    "GERD",
+    "Anxiety",
+    "Depression",
+    "Migraine",
+    "Atrial Fibrillation",
+    "COPD"
+  ]
+
   def run do
     case Cura.Repo.aggregate(Cura.Accounts.User, :count) do
       0 ->
@@ -35,6 +77,7 @@ defmodule Cura.Repo.Seeds.Accounts do
 
       case Accounts.register_user(attrs) do
         {:ok, user} ->
+          if role == :patient, do: seed_patient_profile(user)
           Mix.shell().info("Created #{role} #{user.first_name} #{user.last_name} (#{email})")
 
         {:error, changeset} ->
@@ -43,6 +86,40 @@ defmodule Cura.Repo.Seeds.Accounts do
           )
       end
     end
+  end
+
+  defp seed_patient_profile(user) do
+    height_cm = Enum.random(150..195) * 1.0
+    # weight loosely correlated with height so BMI lands in a believable range
+    weight_kg = Float.round((height_cm - 100) + Enum.random(-15..25) * 1.0, 1)
+
+    attrs = %{
+      user_id: user.id,
+      sex: Enum.random(@sexes),
+      date_of_birth: random_dob(),
+      height_cm: height_cm,
+      weight_kg: weight_kg,
+      medications: Enum.take_random(@medications, Enum.random(0..3)),
+      allergies: Enum.take_random(@allergies, Enum.random(0..2)),
+      conditions: Enum.take_random(@conditions, Enum.random(0..3))
+    }
+
+    case Accounts.create_patient_profile(attrs) do
+      {:ok, _profile} ->
+        :ok
+
+      {:error, changeset} ->
+        Mix.shell().error(
+          "Error creating profile for #{user.email}: " <> Kernel.inspect(changeset.errors)
+        )
+    end
+  end
+
+  defp random_dob do
+    today = Date.utc_today()
+    age_years = Enum.random(18..85)
+    day_offset = Enum.random(0..364)
+    Date.add(today, -(age_years * 365 + day_offset))
   end
 end
 

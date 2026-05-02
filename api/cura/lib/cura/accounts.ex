@@ -6,7 +6,7 @@ defmodule Cura.Accounts do
 
   import Ecto.Query, warn: false
   alias Cura.Repo
-  alias Cura.Accounts.{User, UserToken}
+  alias Cura.Accounts.{PatientProfile, User, UserToken}
 
   @doc """
   Registers a new user.
@@ -14,6 +14,15 @@ defmodule Cura.Accounts do
   def register_user(attrs) do
     %User{}
     |> User.registration_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Creates a patient profile attached to the given user.
+  """
+  def create_patient_profile(attrs) do
+    %PatientProfile{}
+    |> PatientProfile.changeset(attrs)
     |> Repo.insert()
   end
 
@@ -28,7 +37,7 @@ defmodule Cura.Accounts do
   Gets a user by email.
   """
   def get_user_by_email(email) when is_binary(email) do
-    Repo.get_by(User, email: email)
+    User |> Repo.get_by(email: email) |> Repo.preload(:patient_profile)
   end
 
   @doc """
@@ -36,14 +45,14 @@ defmodule Cura.Accounts do
   """
   def get_user_by_email_and_password(email, password)
       when is_binary(email) and is_binary(password) do
-    user = Repo.get_by(User, email: email)
+    user = User |> Repo.get_by(email: email) |> Repo.preload(:patient_profile)
     if User.valid_password?(user, password), do: user
   end
 
   @doc """
   Gets a user by id.
   """
-  def get_user!(id), do: Repo.get!(User, id)
+  def get_user!(id), do: User |> Repo.get!(id) |> Repo.preload(:patient_profile)
 
   ## Session
 
@@ -62,7 +71,7 @@ defmodule Cura.Accounts do
   def fetch_user_by_session_token(encoded_token) when is_binary(encoded_token) do
     with {:ok, query} <- UserToken.verify_session_token_query(encoded_token),
          %User{} = user <- Repo.one(query) do
-      {:ok, user}
+      {:ok, Repo.preload(user, :patient_profile)}
     else
       _ -> :error
     end

@@ -1,11 +1,38 @@
 export type Role = "doctor" | "patient";
 
+export type Sex = "male" | "female" | "other";
+
+export type AllergySeverity = "mild" | "moderate" | "severe";
+
+export type Medication = {
+  name: string;
+  dose: string | null;
+  frequency: string | null;
+};
+
+export type Allergy = {
+  substance: string;
+  severity: AllergySeverity;
+};
+
+export type PatientProfile = {
+  sex: Sex | null;
+  date_of_birth: string | null;
+  weight_kg: number | null;
+  height_cm: number | null;
+  bmi: number | null;
+  medications: Medication[];
+  allergies: Allergy[];
+  conditions: string[];
+};
+
 export type User = {
   id: string;
   email: string;
   first_name: string;
   last_name: string;
   role: Role;
+  patient_profile: PatientProfile | null;
 };
 
 export type AuthSuccess = {

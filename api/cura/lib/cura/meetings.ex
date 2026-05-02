@@ -18,19 +18,19 @@ defmodule Cura.Meetings do
       from m in Meeting,
         where: m.doctor_id == ^user_id or m.patient_id == ^user_id,
         order_by: [asc: m.date, asc: m.time],
-        preload: [:doctor, :patient]
+        preload: [:doctor, patient: :patient_profile]
     )
   end
 
   def get_meeting_for_user!(id, user_id) do
     Repo.get_by!(Meeting, [id: id], or: [doctor_id: user_id, patient_id: user_id])
-    |> Repo.preload([:doctor, :patient])
+    |> Repo.preload([:doctor, patient: :patient_profile])
   end
 
   def get_meeting!(id) do
     case Repo.get(Meeting, id) do
       nil -> {:error, :not_found}
-      meeting -> {:ok, Repo.preload(meeting, [:doctor, :patient])}
+      meeting -> {:ok, Repo.preload(meeting, [:doctor, patient: :patient_profile])}
     end
   end
 

@@ -34,8 +34,11 @@ defmodule Cura.Repo.Seeds.Meetings do
   end
 
   def seed_meetings(meetings_per_doctor \\ 6) do
-    doctors = Repo.all(from u in User, where: u.role == :doctor)
-    patients = Repo.all(from u in User, where: u.role == :patient)
+    # Sort by the numeric suffix in the seeded email ("doctor7@cura.pt" → 7) so
+    # doctorN ends up at index N-1 regardless of insertion order. Lets the
+    # pairing below stay stable across reseeds.
+    doctors = Repo.all(from u in User, where: u.role == :doctor) |> Enum.sort_by(&seed_index/1)
+    patients = Repo.all(from u in User, where: u.role == :patient) |> Enum.sort_by(&seed_index/1)
 
     cond do
       doctors == [] ->
@@ -50,9 +53,18 @@ defmodule Cura.Repo.Seeds.Meetings do
         doctors
         |> Enum.with_index(1)
         |> Enum.each(fn {doctor, doctor_index} ->
+          # doctorN ↔ patientN — guaranteed pairing for manual testing.
+          # Falls back to a random patient if there are more doctors than patients.
+          paired_patient = Enum.at(patients, doctor_index - 1) || Enum.random(patients)
+
           Enum.each(1..meetings_per_doctor, fn meeting_index ->
             date = Date.add(base_date, doctor_index * 2 + meeting_index)
             time = Time.new!(8 + rem(meeting_index, 8), Enum.random([0, 30]), 0)
+
+            # First meeting is always the paired patient so the deterministic
+            # link is visible immediately; the rest stay random for variety.
+            patient =
+              if meeting_index == 1, do: paired_patient, else: Enum.random(patients)
 
             Repo.insert!(%Meeting{
               title: "#{Enum.random(@titles)} - Dr. #{doctor.last_name}",
@@ -63,12 +75,19 @@ defmodule Cura.Repo.Seeds.Meetings do
               timezone: "UTC",
               status: :scheduled,
               doctor_id: doctor.id,
-              patient_id: Enum.random(patients).id
+              patient_id: patient.id
             })
           end)
         end)
 
         Mix.shell().info("Seeded meetings for #{length(doctors)} doctors.")
+    end
+  end
+
+  defp seed_index(%User{email: email}) do
+    case Regex.run(~r/(\d+)@/, email) do
+      [_, n] -> String.to_integer(n)
+      _ -> 0
     end
   end
 end
