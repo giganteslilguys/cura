@@ -1,6 +1,7 @@
 'use client';
 
-import { Heart, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
+import Image from 'next/image';
 
 import type { User } from '@/lib/api/types';
 import { signOut } from '@/lib/api/auth';
@@ -46,15 +47,7 @@ export function Nav({
           ].join(', '),
         }}
       >
-        <div className="flex items-center">
-          <Heart className="w-5 h-5 mr-2" style={{ color: '#b5471b' }} />
-          <span
-            className="font-semibold tracking-tight"
-            style={{ color: '#b5471b' }}
-          >
-            Cura
-          </span>
-        </div>
+        <Image src="/cura.svg" alt="Cura" width={54} height={14} priority />
         {user && token ? (
           <button
             onClick={handleLogout}

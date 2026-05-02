@@ -27,5 +27,6 @@ defmodule CuraWeb.Router do
     get "/meetings", MeetingController, :index
     get "/meetings/:id", MeetingController, :show
     patch "/meetings/:id/intake", MeetingController, :intake
+    patch "/meetings/:id/notes", MeetingController, :update_notes
   end
 end

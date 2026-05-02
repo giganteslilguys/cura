@@ -18,6 +18,18 @@ export function getMeeting(
   });
 }
 
+export function updateMeetingNotes(
+  id: string,
+  notes: string,
+  token: string,
+): Promise<{ meeting: Meeting }> {
+  return apiFetch<{ meeting: Meeting }>(`/api/meetings/${id}/notes`, {
+    method: "PATCH",
+    body: { notes },
+    token,
+  });
+}
+
 export function submitMeetingIntake(
   id: string,
   intake: PatientIntake,

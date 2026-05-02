@@ -100,6 +100,12 @@ defmodule Cura.Meetings.Meeting do
     )
   end
 
+  def notes_changeset(meeting, attrs) do
+    meeting
+    |> cast(attrs, [:notes])
+    |> validate_notes_length()
+  end
+
   def intake_changeset(meeting, attrs) do
     intake = attrs["patient_intake"] || attrs[:patient_intake] || %{}
 

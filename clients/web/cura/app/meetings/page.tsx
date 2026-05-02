@@ -38,6 +38,16 @@ export default async function MeetingsPage() {
               >
                 <div className="flex flex-col gap-0.5">
                   <span className="font-medium text-black">{m.title}</span>
+                  {user.role === 'patient' && m.doctor && (
+                    <span className="text-xs text-black/40">
+                      Dr. {m.doctor.first_name} {m.doctor.last_name}
+                    </span>
+                  )}
+                  {user.role === 'doctor' && m.patient && (
+                    <span className="text-xs text-black/40">
+                      {m.patient.first_name} {m.patient.last_name}
+                    </span>
+                  )}
                   <span className="text-sm text-black/40 flex items-center gap-2.5">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5" />

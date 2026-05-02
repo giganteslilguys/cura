@@ -46,6 +46,12 @@ defmodule Cura.Meetings do
     |> Repo.update()
   end
 
+  def update_notes(%Meeting{} = meeting, attrs) do
+    meeting
+    |> Meeting.notes_changeset(attrs)
+    |> Repo.update()
+  end
+
   def update_meeting(%Meeting{} = meeting, attrs) do
     meeting
     |> Meeting.changeset(attrs)

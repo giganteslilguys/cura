@@ -67,7 +67,7 @@ defmodule Cura.Repo.Seeds.Meetings do
               if meeting_index == 1, do: paired_patient, else: Enum.random(patients)
 
             Repo.insert!(%Meeting{
-              title: "#{Enum.random(@titles)} - Dr. #{doctor.last_name}",
+              title: "#{Enum.random(@titles)}",
               date: date,
               time: time,
               duration: Enum.random(@durations),
@@ -84,7 +84,7 @@ defmodule Cura.Repo.Seeds.Meetings do
             time = Time.new!(9 + rem(days_ago + doctor_index, 8), Enum.random([0, 30]), 0)
 
             Repo.insert!(%Meeting{
-              title: "#{Enum.random(@titles)} - Dr. #{doctor.last_name}",
+              title: "#{Enum.random(@titles)}",
               date: date,
               time: time,
               duration: Enum.random(@durations),

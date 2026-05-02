@@ -16,7 +16,7 @@ import type { Meeting, Suggestion, User } from '@/lib/api/types';
 import { RefObject, useEffect, useRef, useState } from 'react';
 
 import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
-import { submitMeetingIntake } from '@/lib/api/meetings';
+import { submitMeetingIntake, updateMeetingNotes } from '@/lib/api/meetings';
 import { useRouter } from 'next/navigation';
 
 const PC_CONFIG: RTCConfiguration = {
@@ -460,13 +460,13 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       <DoctorMeetingRoom
         meeting={meeting}
         patient={meeting.patient}
+        token={token}
         localVideoRef={localVideoRef}
         remoteVideoRef={remoteVideoRef}
         connState={connState}
         muted={muted}
         videoOff={videoOff}
         error={error}
-        transcript={transcript}
         suggestions={suggestions}
         onToggleMute={toggleMute}
         onToggleVideo={toggleVideo}
@@ -502,13 +502,13 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 function DoctorMeetingRoom({
   meeting,
   patient,
+  token,
   localVideoRef,
   remoteVideoRef,
   connState,
   muted,
   videoOff,
   error,
-  transcript,
   suggestions,
   onToggleMute,
   onToggleVideo,
@@ -516,13 +516,13 @@ function DoctorMeetingRoom({
 }: {
   meeting: Meeting;
   patient: User | null;
+  token: string;
   localVideoRef: RefObject<HTMLVideoElement | null>;
   remoteVideoRef: RefObject<HTMLVideoElement | null>;
   connState: ConnState;
   muted: boolean;
   videoOff: boolean;
   error: string | null;
-  transcript: TranscriptEntry[];
   suggestions: Suggestion[];
   onToggleMute: () => void;
   onToggleVideo: () => void;
@@ -531,12 +531,16 @@ function DoctorMeetingRoom({
   const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(
     new Set(),
   );
-  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
+  const [doctorNotes, setDoctorNotes] = useState(meeting.notes ?? '');
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    const el = transcriptScrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [transcript]);
+  const handleNotesChange = (value: string) => {
+    setDoctorNotes(value);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      updateMeetingNotes(meeting.id, value, token).catch(() => {});
+    }, 1000);
+  };
 
   const toggleSuggestion = (id: string) => {
     setDoneSuggestions((prev) => {
@@ -659,44 +663,18 @@ function DoctorMeetingRoom({
             </div>
           </div>
 
-          {/* Transcript — no card, just a separated section */}
-          <div
-            ref={transcriptScrollRef}
-            className="flex-1 min-h-0 border-t border-black/[0.06] pt-4 pb-2 overflow-y-auto"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-black/35 uppercase tracking-widest">
-                Live Transcript
-              </span>
-              <span className="text-xs text-black/20">
-                {transcript.length === 0
-                  ? 'Waiting…'
-                  : `${transcript.length} segment${transcript.length === 1 ? '' : 's'}`}
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              {transcript.length === 0 ? (
-                <p className="text-xs text-black/25 italic">
-                  Transcription will appear here once the conversation starts.
-                </p>
-              ) : (
-                transcript.slice(-8).map((entry, i) => (
-                  <div key={i} className="flex gap-3 text-xs">
-                    <span className="text-black/25 font-mono w-10 shrink-0 pt-px">
-                      {entry.time}
-                    </span>
-                    <span
-                      className={`w-14 shrink-0 font-semibold pt-px ${entry.speaker === 'doctor' ? 'text-orange-500' : 'text-blue-500'}`}
-                    >
-                      {entry.speaker === 'doctor' ? 'Médico' : 'Paciente'}
-                    </span>
-                    <span className="text-stone-700 leading-relaxed">
-                      {entry.text}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+          {/* Doctor Notes */}
+          <div className="flex-1 min-h-0 border-t border-black/[0.06] pt-4 pb-2 flex flex-col">
+            <span className="text-xs font-medium text-black/35 uppercase tracking-widest mb-3">
+              Notes
+            </span>
+            <textarea
+              value={doctorNotes}
+              onChange={(e) => handleNotesChange(e.target.value)}
+              placeholder="Type your notes here…"
+              maxLength={1000}
+              className="flex-1 w-full resize-none text-xs text-stone-700 leading-relaxed bg-transparent placeholder:text-black/20 focus:outline-none"
+            />
           </div>
         </div>
 
