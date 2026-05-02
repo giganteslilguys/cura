@@ -679,7 +679,7 @@ function DoctorMeetingRoom({
         </div>
 
         {/* Right: Patient Intake + AI Suggestions */}
-        <div className="w-203 shrink-0 flex flex-col gap-3 overflow-hidden">
+        <div className="w-full flex flex-col gap-3 overflow-hidden">
           {/* Patient intake */}
           {meeting.patient_intake ? (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">

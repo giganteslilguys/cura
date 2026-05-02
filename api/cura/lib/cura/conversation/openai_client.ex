@@ -1,9 +1,9 @@
-defmodule Cura.Conversation.GeminiClient do
+defmodule Cura.Conversation.OpenAIClient do
   @moduledoc """
   Real-time clinical decision support. On each conversation tick the channel
   hands us the rolling transcript + every suggestion already shown to the
   doctor; we bundle that with the patient's profile and pre-visit intake,
-  ask Gemini for *new* suggestions only, dedupe defensively against the
+  ask OpenAI for *new* suggestions only, dedupe defensively against the
   prior list, broadcast to the room, and write the survivors back to
   `RoomStore` so the next tick sees them too.
   """
@@ -14,7 +14,8 @@ defmodule Cura.Conversation.GeminiClient do
   alias Cura.Conversation.RoomStore
   alias Cura.Meetings
 
-  @gemini_url "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+  @openai_url "https://api.openai.com/v1/chat/completions"
+  @model "gpt-4o-mini"
 
   # Instructions are in English so the model treats them as guidance, but
   # the *generated* `text` and `rationale` fields must be written in
@@ -52,13 +53,13 @@ defmodule Cura.Conversation.GeminiClient do
   end
 
   defp suggest(meeting_id, transcript, prior_suggestions, order_id) do
-    api_key = Application.fetch_env!(:cura, :gemini_api_key)
+    api_key = Application.fetch_env!(:cura, :openai_api_key)
     started_at = System.monotonic_time(:millisecond)
 
     with {:ok, meeting} <- Meetings.get_meeting!(meeting_id),
          :ok <- log_start(meeting, meeting_id, order_id, transcript, prior_suggestions),
          user_content = build_user_content(meeting, transcript, prior_suggestions),
-         {:ok, items} <- call_gemini(api_key, user_content) do
+         {:ok, items} <- call_openai(api_key, user_content) do
       new_items = items |> dedupe(prior_suggestions) |> Enum.map(&assign_id/1)
       took_ms = System.monotonic_time(:millisecond) - started_at
       dropped = length(items) - length(new_items)
@@ -73,23 +74,23 @@ defmodule Cura.Conversation.GeminiClient do
           })
 
           Logger.info(
-            "[Gemini] room=#{meeting_id} order=#{order_id} broadcast=#{length(new_items)} dedup_dropped=#{dropped} took_ms=#{took_ms}"
+            "[OpenAI] room=#{meeting_id} order=#{order_id} broadcast=#{length(new_items)} dedup_dropped=#{dropped} took_ms=#{took_ms}"
           )
 
           Enum.each(new_items, fn item ->
             Logger.info(
-              "[Gemini] room=#{meeting_id} order=#{order_id} NEW [#{item["type"]}/#{item["priority"]}] #{inspect(item["text"])} — #{inspect(item["rationale"])}"
+              "[OpenAI] room=#{meeting_id} order=#{order_id} NEW [#{item["type"]}/#{item["priority"]}] #{inspect(item["text"])} — #{inspect(item["rationale"])}"
             )
           end)
 
         items == [] ->
           Logger.info(
-            "[Gemini] room=#{meeting_id} order=#{order_id} model returned no suggestions took_ms=#{took_ms}"
+            "[OpenAI] room=#{meeting_id} order=#{order_id} model returned no suggestions took_ms=#{took_ms}"
           )
 
         true ->
           Logger.info(
-            "[Gemini] room=#{meeting_id} order=#{order_id} all #{length(items)} items deduped, nothing to broadcast took_ms=#{took_ms}"
+            "[OpenAI] room=#{meeting_id} order=#{order_id} all #{length(items)} items deduped, nothing to broadcast took_ms=#{took_ms}"
           )
       end
 
@@ -99,7 +100,7 @@ defmodule Cura.Conversation.GeminiClient do
         took_ms = System.monotonic_time(:millisecond) - started_at
 
         Logger.error(
-          "[Gemini] room=#{meeting_id} order=#{order_id} failed=#{inspect(error)} took_ms=#{took_ms}"
+          "[OpenAI] room=#{meeting_id} order=#{order_id} failed=#{inspect(error)} took_ms=#{took_ms}"
         )
 
         error
@@ -128,29 +129,38 @@ defmodule Cura.Conversation.GeminiClient do
       end
 
     Logger.info(
-      "[Gemini] room=#{meeting_id} order=#{order_id} starting transcript_chars=#{String.length(to_string(transcript))} prior=#{length(prior_suggestions)} patient=#{inspect(name)} #{summary} reason=#{inspect(intake_reason)}"
+      "[OpenAI] room=#{meeting_id} order=#{order_id} starting transcript_chars=#{String.length(to_string(transcript))} prior=#{length(prior_suggestions)} patient=#{inspect(name)} #{summary} reason=#{inspect(intake_reason)}"
     )
 
     :ok
   end
 
-  defp call_gemini(api_key, user_content) do
+  defp call_openai(api_key, user_content) do
     body = %{
-      systemInstruction: %{parts: [%{text: @system_prompt}]},
-      contents: [%{role: "user", parts: [%{text: user_content}]}],
-      generationConfig: %{
-        responseMimeType: "application/json",
-        responseSchema: response_schema(),
-        temperature: 0.4
-      }
+      model: @model,
+      messages: [
+        %{role: "system", content: @system_prompt},
+        %{role: "user", content: user_content}
+      ],
+      response_format: %{
+        type: "json_schema",
+        json_schema: %{
+          name: "clinical_suggestions",
+          strict: true,
+          schema: response_schema()
+        }
+      },
+      temperature: 0.4
     }
 
-    case Req.post(@gemini_url, json: body, params: [key: api_key], receive_timeout: 30_000) do
+    headers = [{"authorization", "Bearer #{api_key}"}]
+
+    case Req.post(@openai_url, json: body, headers: headers, receive_timeout: 30_000) do
       {:ok, %{status: 200, body: response}} ->
         parse_response(response)
 
       {:ok, %{status: status, body: response}} ->
-        Logger.error("[Gemini] status=#{status} body=#{inspect(response)}")
+        Logger.error("[OpenAI] status=#{status} body=#{inspect(response)}")
         {:error, {:bad_status, status}}
 
       {:error, reason} ->
@@ -160,21 +170,21 @@ defmodule Cura.Conversation.GeminiClient do
 
   defp parse_response(response) do
     text =
-      get_in(response, ["candidates", Access.at(0), "content", "parts", Access.at(0), "text"])
+      get_in(response, ["choices", Access.at(0), "message", "content"])
 
     with text when is_binary(text) <- text,
-         {:ok, items} when is_list(items) <- Jason.decode(text) do
+         {:ok, %{"items" => items}} when is_list(items) <- Jason.decode(text) do
       valid = Enum.filter(items, &valid_item?/1)
       invalid = length(items) - length(valid)
 
       if invalid > 0 do
-        Logger.warning("[Gemini] dropped #{invalid} malformed item(s) from response")
+        Logger.warning("[OpenAI] dropped #{invalid} malformed item(s) from response")
       end
 
       {:ok, valid}
     else
       _ ->
-        Logger.error("[Gemini] could not parse response text=#{inspect(text)}")
+        Logger.error("[OpenAI] could not parse response text=#{inspect(text)}")
         {:error, :invalid_response}
     end
   end
@@ -206,18 +216,30 @@ defmodule Cura.Conversation.GeminiClient do
 
   defp assign_id(item), do: Map.put(item, "id", Ecto.UUID.generate())
 
+  # OpenAI structured outputs require the top-level schema to be an object,
+  # so we wrap the array of suggestions under an "items" key. `strict: true`
+  # also requires `additionalProperties: false` on every object and every
+  # property listed in `required`.
   defp response_schema do
     %{
-      type: "ARRAY",
-      items: %{
-        type: "OBJECT",
-        properties: %{
-          type: %{type: "STRING", enum: ["question", "action", "flag"]},
-          text: %{type: "STRING"},
-          rationale: %{type: "STRING"},
-          priority: %{type: "STRING", enum: ["high", "medium", "low"]}
-        },
-        required: ["type", "text", "rationale", "priority"]
+      type: "object",
+      additionalProperties: false,
+      required: ["items"],
+      properties: %{
+        items: %{
+          type: "array",
+          items: %{
+            type: "object",
+            additionalProperties: false,
+            required: ["type", "text", "rationale", "priority"],
+            properties: %{
+              type: %{type: "string", enum: ["question", "action", "flag"]},
+              text: %{type: "string"},
+              rationale: %{type: "string"},
+              priority: %{type: "string", enum: ["high", "medium", "low"]}
+            }
+          }
+        }
       }
     }
   end
