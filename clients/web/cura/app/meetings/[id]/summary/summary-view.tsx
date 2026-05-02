@@ -14,14 +14,19 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
-import type { Diagnosis, Meeting, Prescription, VisitSummary } from '@/lib/api/types';
+import type { Diagnosis, Meeting, Prescription, User, VisitSummary } from '@/lib/api/types';
+import { Nav } from '@/components/nav';
 
 export function SummaryView({
   meeting,
   soap,
+  user,
+  token,
 }: {
   meeting: Meeting;
   soap: VisitSummary;
+  user?: User;
+  token?: string;
 }) {
   const doctor = meeting.doctor;
 
@@ -44,23 +49,20 @@ export function SummaryView({
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white border-b border-stone-200">
-        <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-semibold text-stone-900">Resumo da Consulta</h1>
-            <p className="text-xs text-stone-400">{dateStr}</p>
+      <Nav
+        user={user}
+        token={token}
+        wide
+        center={
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-sm text-black/70 truncate">Resumo da Consulta</span>
+            <span className="w-1 h-1 rounded-full bg-black/20 shrink-0" />
+            <span className="text-xs text-black/40 shrink-0">{dateStr}</span>
           </div>
-          <Link
-            href="/meetings"
-            className="px-4 py-1.5 text-sm font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-full transition-colors"
-          >
-            Voltar às consultas
-          </Link>
-        </div>
-      </header>
+        }
+      />
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 pt-20 pb-6 space-y-4">
 
         {/* Doctor / visit info card */}
         <div className="bg-white rounded-2xl border border-stone-200 p-5">

@@ -37,6 +37,7 @@ import {
   updateMeetingNotes,
 } from '@/lib/api/meetings';
 
+import { Nav } from '@/components/nav';
 import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
 import { getOnSitePhase } from '@/lib/meeting/phase';
 import { useRouter } from 'next/navigation';
@@ -65,7 +66,11 @@ type SignalPayload = {
 
 type PresenceState = Record<string, { metas: Array<Record<string, unknown>> }>;
 
-type LiveTranscriptEntry = { time: string; text: string; speaker: 'doctor' | 'patient' };
+type LiveTranscriptEntry = {
+  time: string;
+  text: string;
+  speaker: 'doctor' | 'patient';
+};
 
 type MeetingPhase = 'pre' | 'active' | 'post';
 
@@ -96,7 +101,12 @@ function getTimeUntilStart(meeting: Meeting): string | null {
   return `${s}s`;
 }
 
-export function MeetingRoom({ meeting, currentUser, token, forceReport }: Props) {
+export function MeetingRoom({
+  meeting,
+  currentUser,
+  token,
+  forceReport,
+}: Props) {
   const router = useRouter();
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -482,30 +492,52 @@ export function MeetingRoom({ meeting, currentUser, token, forceReport }: Props)
   // Patients aren't expected to "join" — they're physically next to the doctor.
   if (meeting.kind === 'on_site') {
     if (!isDoctor) {
-      return <OnSiteNotForPatient onBack={endCall} />;
+      return (
+        <OnSiteNotForPatient
+          onBack={endCall}
+          currentUser={currentUser}
+          token={token}
+        />
+      );
     }
     const onSitePhase = forceReport ? 'post' : getOnSitePhase(meeting);
     if (onSitePhase === 'post') {
-      return <DoctorPostMeetingView meeting={meeting} token={token} onBack={endCall} />;
+      return (
+        <DoctorPostMeetingView
+          meeting={meeting}
+          token={token}
+          onBack={endCall}
+          currentUser={currentUser}
+        />
+      );
     }
     return (
       <OnSiteMeetingRoom
         meeting={meeting}
         token={token}
         onLeave={endCall}
+        currentUser={currentUser}
       />
     );
   }
 
   if (isDoctor) {
-    if (phase === "post") {
-      return <DoctorPostMeetingView meeting={meeting} token={token} onBack={endCall} />;
+    if (phase === 'post') {
+      return (
+        <DoctorPostMeetingView
+          meeting={meeting}
+          token={token}
+          onBack={endCall}
+          currentUser={currentUser}
+        />
+      );
     }
     return (
       <DoctorMeetingRoom
         meeting={meeting}
         patient={meeting.patient}
         token={token}
+        currentUser={currentUser}
         localVideoRef={localVideoRef}
         remoteVideoRef={remoteVideoRef}
         connState={connState}
@@ -521,16 +553,31 @@ export function MeetingRoom({ meeting, currentUser, token, forceReport }: Props)
   }
 
   if (phase === 'pre') {
-    return <PatientPreMeetingView meeting={meeting} token={token} />;
+    return (
+      <PatientPreMeetingView
+        meeting={meeting}
+        token={token}
+        currentUser={currentUser}
+      />
+    );
   }
 
   if (phase === 'post') {
-    return <PatientPostMeetingView meeting={meeting} token={token} onBack={endCall} />;
+    return (
+      <PatientPostMeetingView
+        meeting={meeting}
+        token={token}
+        onBack={endCall}
+        currentUser={currentUser}
+      />
+    );
   }
 
   return (
     <PatientMeetingRoom
       doctor={meeting.doctor}
+      token={token}
+      currentUser={currentUser}
       localVideoRef={localVideoRef}
       remoteVideoRef={remoteVideoRef}
       connState={connState}
@@ -562,10 +609,12 @@ function OnSiteMeetingRoom({
   meeting,
   token,
   onLeave,
+  currentUser,
 }: {
   meeting: Meeting;
   token: string;
   onLeave: () => void;
+  currentUser: User;
 }) {
   const router = useRouter();
   const conversationChannelRef = useRef<Channel | null>(null);
@@ -579,7 +628,9 @@ function OnSiteMeetingRoom({
   // On-site visits don't share state with the parent (the parent's effect
   // early-returns for kind: "on_site"), so suggestions are tracked locally.
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(new Set());
+  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(
+    new Set(),
+  );
   const [ending, setEnding] = useState(false);
 
   useEffect(() => {
@@ -778,17 +829,29 @@ function OnSiteMeetingRoom({
 
   return (
     <div className="flex flex-col h-screen bg-stone-50 text-stone-900">
-      <header className="flex items-center gap-4 px-6 py-3 bg-white border-b border-stone-200 shrink-0">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shrink-0">
-            <PersonIcon className="w-5 h-5" />
+      <Nav
+        user={currentUser}
+        token={token}
+        wide
+        center={
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-sm text-black/70 truncate">
+              {patientName}
+            </span>
+            <span className="w-1 h-1 rounded-full bg-black/20 shrink-0" />
+            <span className="text-xs text-black/40 shrink-0">
+              Consulta presencial
+            </span>
           </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-stone-900 truncate">{patientName}</p>
-            <p className="text-xs text-stone-400 truncate">
-              {meeting.title} · Consulta presencial
-            </p>
-          </div>
+        }
+      />
+      <div className="h-26 shrink-0" />
+      <div className="flex items-center justify-between px-6 pb-3 shrink-0">
+        <div>
+          <p className="font-semibold text-stone-900 text-sm">{patientName}</p>
+          <p className="text-xs text-stone-400">
+            {meeting.title} · Consulta presencial
+          </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
@@ -815,9 +878,9 @@ function OnSiteMeetingRoom({
             {ending ? 'A terminar…' : 'Terminar consulta'}
           </button>
         </div>
-      </header>
+      </div>
 
-      <div className="flex flex-1 gap-4 p-4 overflow-hidden">
+      <div className="flex flex-1 gap-4 px-4 pb-4 overflow-hidden">
         {/* Live transcript */}
         <div className="flex-1 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden min-w-0">
           <div className="px-5 pt-4 pb-3 border-b border-stone-100 shrink-0">
@@ -831,9 +894,7 @@ function OnSiteMeetingRoom({
             </p>
           </div>
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-            {error && (
-              <p className="text-sm text-[#b5471b]">{error}</p>
-            )}
+            {error && <p className="text-sm text-[#b5471b]">{error}</p>}
             {transcript.length === 0 && !error && (
               <p className="text-sm text-stone-400 italic">
                 A transcrição aparecerá aqui à medida que a consulta decorre.
@@ -847,7 +908,9 @@ function OnSiteMeetingRoom({
                   </span>
                   <span
                     className={`text-[10px] font-semibold uppercase tracking-wide ${
-                      entry.speaker === 'doctor' ? 'text-orange-500' : 'text-blue-500'
+                      entry.speaker === 'doctor'
+                        ? 'text-orange-500'
+                        : 'text-blue-500'
                     }`}
                   >
                     {entry.speaker === 'doctor' ? 'MD' : 'Pt'}
@@ -896,13 +959,22 @@ function OnSiteMeetingRoom({
   );
 }
 
-function OnSiteNotForPatient({ onBack }: { onBack: () => void }) {
+function OnSiteNotForPatient({
+  onBack,
+  currentUser,
+  token,
+}: {
+  onBack: () => void;
+  currentUser: User;
+  token: string;
+}) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 text-stone-900 px-6 text-center gap-4">
+      <Nav user={currentUser} token={token} />
       <p className="text-xl font-semibold">Consulta presencial</p>
       <p className="text-sm text-stone-500 max-w-md">
-        Esta é uma consulta presencial — o seu médico está a registá-la em pessoa.
-        Não há nada a fazer aqui.
+        Esta é uma consulta presencial — o seu médico está a registá-la em
+        pessoa. Não há nada a fazer aqui.
       </p>
       <button
         onClick={onBack}
@@ -918,25 +990,49 @@ function DoctorPostMeetingView({
   meeting,
   token,
   onBack,
+  currentUser,
 }: {
   meeting: Meeting;
   token: string;
   onBack: () => void;
+  currentUser: User;
 }) {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
 
-  const [bpInput, setBpInput] = useState(meeting.soap_note?.vitals?.blood_pressure ?? "");
-  const [hrInput, setHrInput] = useState(meeting.soap_note?.vitals?.heart_rate ?? "");
-  const [tempInput, setTempInput] = useState(meeting.soap_note?.vitals?.temperature ?? "");
-  const [weightInput, setWeightInput] = useState(meeting.soap_note?.vitals?.weight ?? "");
-  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>(meeting.soap_note?.diagnoses ?? []);
-  const [clinicalAssessment, setClinicalAssessment] = useState(meeting.soap_note?.clinical_assessment ?? "");
-  const [treatmentPlan, setTreatmentPlan] = useState<string[]>(meeting.soap_note?.treatment_plan ?? []);
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(meeting.soap_note?.prescriptions ?? []);
-  const [labOrders, setLabOrders] = useState<string[]>(meeting.soap_note?.lab_orders ?? []);
-  const [followUp, setFollowUp] = useState(meeting.soap_note?.follow_up_appointment ?? "");
-  const [whenToSeekCare, setWhenToSeekCare] = useState<string[]>(meeting.soap_note?.when_to_seek_care ?? []);
+  const [bpInput, setBpInput] = useState(
+    meeting.soap_note?.vitals?.blood_pressure ?? '',
+  );
+  const [hrInput, setHrInput] = useState(
+    meeting.soap_note?.vitals?.heart_rate ?? '',
+  );
+  const [tempInput, setTempInput] = useState(
+    meeting.soap_note?.vitals?.temperature ?? '',
+  );
+  const [weightInput, setWeightInput] = useState(
+    meeting.soap_note?.vitals?.weight ?? '',
+  );
+  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>(
+    meeting.soap_note?.diagnoses ?? [],
+  );
+  const [clinicalAssessment, setClinicalAssessment] = useState(
+    meeting.soap_note?.clinical_assessment ?? '',
+  );
+  const [treatmentPlan, setTreatmentPlan] = useState<string[]>(
+    meeting.soap_note?.treatment_plan ?? [],
+  );
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>(
+    meeting.soap_note?.prescriptions ?? [],
+  );
+  const [labOrders, setLabOrders] = useState<string[]>(
+    meeting.soap_note?.lab_orders ?? [],
+  );
+  const [followUp, setFollowUp] = useState(
+    meeting.soap_note?.follow_up_appointment ?? '',
+  );
+  const [whenToSeekCare, setWhenToSeekCare] = useState<string[]>(
+    meeting.soap_note?.when_to_seek_care ?? [],
+  );
 
   const [submitted, setSubmitted] = useState(meeting.soap_note_submitted);
   const [saving, setSaving] = useState(false);
@@ -952,45 +1048,74 @@ function DoctorPostMeetingView({
   }, [meeting.id, token]);
 
   const updateDiagnosis = (i: number, updates: Partial<Diagnosis>) =>
-    setDiagnoses(prev => prev.map((d, idx) => idx === i ? { ...d, ...updates } : d));
-  const addDiagnosis = () => setDiagnoses(prev => [...prev, { condition: "", icd_code: null, type: "primary" }]);
-  const removeDiagnosis = (i: number) => setDiagnoses(prev => prev.filter((_, idx) => idx !== i));
+    setDiagnoses((prev) =>
+      prev.map((d, idx) => (idx === i ? { ...d, ...updates } : d)),
+    );
+  const addDiagnosis = () =>
+    setDiagnoses((prev) => [
+      ...prev,
+      { condition: '', icd_code: null, type: 'primary' },
+    ]);
+  const removeDiagnosis = (i: number) =>
+    setDiagnoses((prev) => prev.filter((_, idx) => idx !== i));
 
-  const updateTreatmentItem = (i: number, v: string) => setTreatmentPlan(prev => prev.map((t, idx) => idx === i ? v : t));
-  const addTreatmentItem = () => setTreatmentPlan(prev => [...prev, ""]);
-  const removeTreatmentItem = (i: number) => setTreatmentPlan(prev => prev.filter((_, idx) => idx !== i));
+  const updateTreatmentItem = (i: number, v: string) =>
+    setTreatmentPlan((prev) => prev.map((t, idx) => (idx === i ? v : t)));
+  const addTreatmentItem = () => setTreatmentPlan((prev) => [...prev, '']);
+  const removeTreatmentItem = (i: number) =>
+    setTreatmentPlan((prev) => prev.filter((_, idx) => idx !== i));
 
   const updatePrescription = (i: number, updates: Partial<Prescription>) =>
-    setPrescriptions(prev => prev.map((rx, idx) => idx === i ? { ...rx, ...updates } : rx));
-  const addPrescription = () => setPrescriptions(prev => [...prev, { name: "", dosage: null, quantity: null, refills: null, instructions: null }]);
-  const removePrescription = (i: number) => setPrescriptions(prev => prev.filter((_, idx) => idx !== i));
+    setPrescriptions((prev) =>
+      prev.map((rx, idx) => (idx === i ? { ...rx, ...updates } : rx)),
+    );
+  const addPrescription = () =>
+    setPrescriptions((prev) => [
+      ...prev,
+      {
+        name: '',
+        dosage: null,
+        quantity: null,
+        refills: null,
+        instructions: null,
+      },
+    ]);
+  const removePrescription = (i: number) =>
+    setPrescriptions((prev) => prev.filter((_, idx) => idx !== i));
 
-  const updateLabOrder = (i: number, v: string) => setLabOrders(prev => prev.map((l, idx) => idx === i ? v : l));
-  const addLabOrder = () => setLabOrders(prev => [...prev, ""]);
-  const removeLabOrder = (i: number) => setLabOrders(prev => prev.filter((_, idx) => idx !== i));
+  const updateLabOrder = (i: number, v: string) =>
+    setLabOrders((prev) => prev.map((l, idx) => (idx === i ? v : l)));
+  const addLabOrder = () => setLabOrders((prev) => [...prev, '']);
+  const removeLabOrder = (i: number) =>
+    setLabOrders((prev) => prev.filter((_, idx) => idx !== i));
 
-  const updateWhenToSeekCare = (i: number, v: string) => setWhenToSeekCare(prev => prev.map((w, idx) => idx === i ? v : w));
-  const addWhenToSeekCare = () => setWhenToSeekCare(prev => [...prev, ""]);
-  const removeWhenToSeekCare = (i: number) => setWhenToSeekCare(prev => prev.filter((_, idx) => idx !== i));
+  const updateWhenToSeekCare = (i: number, v: string) =>
+    setWhenToSeekCare((prev) => prev.map((w, idx) => (idx === i ? v : w)));
+  const addWhenToSeekCare = () => setWhenToSeekCare((prev) => [...prev, '']);
+  const removeWhenToSeekCare = (i: number) =>
+    setWhenToSeekCare((prev) => prev.filter((_, idx) => idx !== i));
 
   const handleSave = async (doSubmit: boolean) => {
     setSaving(true);
     setSaveError(null);
     try {
       const note: VisitSummary = {
-        vitals: (bpInput || hrInput || tempInput || weightInput) ? {
-          blood_pressure: bpInput.trim() || null,
-          heart_rate: hrInput.trim() || null,
-          temperature: tempInput.trim() || null,
-          weight: weightInput.trim() || null,
-        } : null,
-        diagnoses: diagnoses.filter(d => d.condition.trim()),
+        vitals:
+          bpInput || hrInput || tempInput || weightInput
+            ? {
+                blood_pressure: bpInput.trim() || null,
+                heart_rate: hrInput.trim() || null,
+                temperature: tempInput.trim() || null,
+                weight: weightInput.trim() || null,
+              }
+            : null,
+        diagnoses: diagnoses.filter((d) => d.condition.trim()),
         clinical_assessment: clinicalAssessment.trim() || null,
-        treatment_plan: treatmentPlan.filter(t => t.trim()),
-        prescriptions: prescriptions.filter(p => p.name.trim()),
-        lab_orders: labOrders.filter(l => l.trim()),
+        treatment_plan: treatmentPlan.filter((t) => t.trim()),
+        prescriptions: prescriptions.filter((p) => p.name.trim()),
+        lab_orders: labOrders.filter((l) => l.trim()),
         follow_up_appointment: followUp.trim() || null,
-        when_to_seek_care: whenToSeekCare.filter(w => w.trim()),
+        when_to_seek_care: whenToSeekCare.filter((w) => w.trim()),
       };
       await saveVisitSummary(meeting.id, note, doSubmit, token);
       if (doSubmit) setSubmitted(true);
@@ -1008,18 +1133,20 @@ function DoctorPostMeetingView({
     try {
       const { soap_note: note } = await generateSoapDraft(meeting.id, token);
       if (note.vitals) {
-        setBpInput(note.vitals.blood_pressure ?? "");
-        setHrInput(note.vitals.heart_rate ?? "");
-        setTempInput(note.vitals.temperature ?? "");
-        setWeightInput(note.vitals.weight ?? "");
+        setBpInput(note.vitals.blood_pressure ?? '');
+        setHrInput(note.vitals.heart_rate ?? '');
+        setTempInput(note.vitals.temperature ?? '');
+        setWeightInput(note.vitals.weight ?? '');
       }
       if (note.diagnoses?.length) setDiagnoses(note.diagnoses);
-      if (note.clinical_assessment) setClinicalAssessment(note.clinical_assessment);
+      if (note.clinical_assessment)
+        setClinicalAssessment(note.clinical_assessment);
       if (note.treatment_plan?.length) setTreatmentPlan(note.treatment_plan);
       if (note.prescriptions?.length) setPrescriptions(note.prescriptions);
       if (note.lab_orders?.length) setLabOrders(note.lab_orders);
       if (note.follow_up_appointment) setFollowUp(note.follow_up_appointment);
-      if (note.when_to_seek_care?.length) setWhenToSeekCare(note.when_to_seek_care);
+      if (note.when_to_seek_care?.length)
+        setWhenToSeekCare(note.when_to_seek_care);
     } catch {
       setSaveError(
         'Não foi possível gerar o rascunho. Verifique se existe uma transcrição disponível.',
@@ -1031,50 +1158,37 @@ function DoctorPostMeetingView({
 
   const patientName = meeting.patient
     ? `${meeting.patient.first_name} ${meeting.patient.last_name}`
-    : "Patient";
+    : 'Patient';
 
   const profile = meeting.patient?.patient_profile ?? null;
 
   const start = new Date(`${meeting.date}T${meeting.time}`);
-  const dateStr = start.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  const dateStr = start.toLocaleDateString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
-  const inputCls = "w-full px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-sm text-stone-800 placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-orange-400/50 focus:border-transparent disabled:opacity-60 disabled:cursor-default";
+  const inputCls =
+    'w-full px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-sm text-stone-800 placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-orange-400/50 focus:border-transparent disabled:opacity-60 disabled:cursor-default';
 
   return (
     <div className="flex flex-col h-screen bg-stone-100 text-stone-900">
-      <header className="flex items-center gap-4 px-6 py-3 bg-white border-b border-stone-200 shrink-0">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shrink-0">
-            <PersonIcon className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-stone-900 truncate">{patientName}</p>
-            <p className="text-xs text-stone-400 truncate">{meeting.title} · {dateStr}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          {submitted ? (
-            <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full">
-              <CheckIcon className="w-3.5 h-3.5" />
-              Resumo submetido
+      <Nav
+        user={currentUser}
+        token={token}
+        wide
+        center={
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-sm text-black/70 truncate">
+              {patientName}
             </span>
-          ) : lastSaved ? (
-            <span className="text-xs text-stone-400">
-              Rascunho guardado às{' '}
-              {lastSaved.toLocaleTimeString('pt-PT', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          ) : null}
-          <button
-            onClick={onBack}
-            className="px-4 py-2 text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors"
-          >
-            Voltar às consultas
-          </button>
-        </div>
-      </header>
+            <span className="w-1 h-1 rounded-full bg-black/20 shrink-0" />
+            <span className="text-xs text-black/40 shrink-0">{dateStr}</span>
+          </div>
+        }
+      />
+      <div className="h-26 shrink-0" />
 
       <div className="flex flex-1 gap-4 p-4 overflow-hidden">
         {/* Left: Transcript */}
@@ -1110,12 +1224,18 @@ function DoctorPostMeetingView({
                 return (
                   <div key={entry.id} className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-stone-400 w-10 shrink-0">{time}</span>
-                      <span className={`text-[10px] font-semibold uppercase tracking-wide ${entry.speaker === "doctor" ? "text-orange-500" : "text-blue-500"}`}>
-                        {entry.speaker === "doctor" ? "MD" : "Pt"}
+                      <span className="text-[10px] font-mono text-stone-400 w-10 shrink-0">
+                        {time}
+                      </span>
+                      <span
+                        className={`text-[10px] font-semibold uppercase tracking-wide ${entry.speaker === 'doctor' ? 'text-orange-500' : 'text-blue-500'}`}
+                      >
+                        {entry.speaker === 'doctor' ? 'MD' : 'Pt'}
                       </span>
                     </div>
-                    <p className="text-xs text-stone-700 leading-relaxed pl-12">{entry.text}</p>
+                    <p className="text-xs text-stone-700 leading-relaxed pl-12">
+                      {entry.text}
+                    </p>
                   </div>
                 );
               })
@@ -1125,7 +1245,9 @@ function DoctorPostMeetingView({
 
         {/* Center: Visit Summary form */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <div className={`flex-1 bg-white rounded-xl border border-stone-200 flex flex-col overflow-hidden ${generating ? 'cura-ai-pending' : ''}`}>
+          <div
+            className={`flex-1 bg-white rounded-xl border border-stone-200 flex flex-col overflow-hidden ${generating ? 'cura-ai-pending' : ''}`}
+          >
             <div className="px-6 pt-5 pb-4 border-b border-stone-100 shrink-0 relative">
               <div className="flex items-center gap-2">
                 <StethoscopeIcon className="w-4 h-4 text-orange-500 shrink-0" />
@@ -1140,13 +1262,16 @@ function DoctorPostMeetingView({
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-100 cura-ai-shimmer">
                   <Sparkles className="w-3.5 h-3.5 text-orange-600 cura-ai-pulse shrink-0" />
                   <p className="text-xs font-medium text-orange-900">
-                    Drafting visit summary from the transcript and patient context…
+                    Drafting visit summary from the transcript and patient
+                    context…
                   </p>
                 </div>
               )}
             </div>
 
-            <div className={`flex-1 overflow-y-auto px-6 py-5 space-y-6 transition-opacity duration-300 ${generating ? 'opacity-60' : 'opacity-100'}`}>
+            <div
+              className={`flex-1 overflow-y-auto px-6 py-5 space-y-6 transition-opacity duration-300 ${generating ? 'opacity-60' : 'opacity-100'}`}
+            >
               {/* Vitals */}
               <FormSection
                 icon={<HeartPulseIcon className="w-4 h-4" />}
@@ -1191,9 +1316,14 @@ function DoctorPostMeetingView({
               >
                 <div className="space-y-2">
                   {diagnoses.map((d, i) => (
-                    <div key={i} className="border border-stone-200 rounded-xl p-3 space-y-2">
+                    <div
+                      key={i}
+                      className="border border-stone-200 rounded-xl p-3 space-y-2"
+                    >
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-stone-400">Diagnosis {i + 1}</span>
+                        <span className="text-xs font-medium text-stone-400">
+                          Diagnosis {i + 1}
+                        </span>
                         {!submitted && (
                           <button
                             onClick={() => removeDiagnosis(i)}
@@ -1209,7 +1339,9 @@ function DoctorPostMeetingView({
                           ("Tiroidite autoimune de Hashimoto") still display. */}
                       <input
                         value={d.condition}
-                        onChange={e => updateDiagnosis(i, { condition: e.target.value })}
+                        onChange={(e) =>
+                          updateDiagnosis(i, { condition: e.target.value })
+                        }
                         disabled={submitted}
                         placeholder="Nome da condição"
                         className={`flex-1 ${inputCls}`}
@@ -1266,7 +1398,7 @@ function DoctorPostMeetingView({
               >
                 <textarea
                   value={clinicalAssessment}
-                  onChange={e => setClinicalAssessment(e.target.value)}
+                  onChange={(e) => setClinicalAssessment(e.target.value)}
                   disabled={submitted}
                   rows={3}
                   placeholder="Insira notas de avaliação clínica…"
@@ -1284,13 +1416,16 @@ function DoctorPostMeetingView({
                     <div key={i} className="flex gap-2 items-center">
                       <input
                         value={item}
-                        onChange={e => updateTreatmentItem(i, e.target.value)}
+                        onChange={(e) => updateTreatmentItem(i, e.target.value)}
                         disabled={submitted}
                         placeholder="Item do tratamento…"
                         className={`flex-1 ${inputCls}`}
                       />
                       {!submitted && (
-                        <button onClick={() => removeTreatmentItem(i)} className="text-stone-400 hover:text-red-500 transition-colors shrink-0">
+                        <button
+                          onClick={() => removeTreatmentItem(i)}
+                          className="text-stone-400 hover:text-red-500 transition-colors shrink-0"
+                        >
                           <XIcon className="w-4 h-4" />
                         </button>
                       )}
@@ -1314,20 +1449,28 @@ function DoctorPostMeetingView({
               >
                 <div className="space-y-3">
                   {prescriptions.map((rx, i) => (
-                    <div key={i} className="border border-stone-200 rounded-xl p-3 space-y-2">
+                    <div
+                      key={i}
+                      className="border border-stone-200 rounded-xl p-3 space-y-2"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-stone-400">
                           Prescrição {i + 1}
                         </span>
                         {!submitted && (
-                          <button onClick={() => removePrescription(i)} className="text-stone-400 hover:text-red-500 transition-colors">
+                          <button
+                            onClick={() => removePrescription(i)}
+                            className="text-stone-400 hover:text-red-500 transition-colors"
+                          >
                             <XIcon className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </div>
                       <input
                         value={rx.name}
-                        onChange={e => updatePrescription(i, { name: e.target.value })}
+                        onChange={(e) =>
+                          updatePrescription(i, { name: e.target.value })
+                        }
                         disabled={submitted}
                         placeholder="Nome do medicamento"
                         className={inputCls}
@@ -1368,8 +1511,12 @@ function DoctorPostMeetingView({
                         />
                       </div>
                       <textarea
-                        value={rx.instructions ?? ""}
-                        onChange={e => updatePrescription(i, { instructions: e.target.value || null })}
+                        value={rx.instructions ?? ''}
+                        onChange={(e) =>
+                          updatePrescription(i, {
+                            instructions: e.target.value || null,
+                          })
+                        }
                         disabled={submitted}
                         rows={2}
                         placeholder="Instruções de dosagem…"
@@ -1398,13 +1545,16 @@ function DoctorPostMeetingView({
                     <div key={i} className="flex gap-2 items-center">
                       <input
                         value={order}
-                        onChange={e => updateLabOrder(i, e.target.value)}
+                        onChange={(e) => updateLabOrder(i, e.target.value)}
                         disabled={submitted}
                         placeholder="Pedido de análise…"
                         className={`flex-1 ${inputCls}`}
                       />
                       {!submitted && (
-                        <button onClick={() => removeLabOrder(i)} className="text-stone-400 hover:text-red-500 transition-colors shrink-0">
+                        <button
+                          onClick={() => removeLabOrder(i)}
+                          className="text-stone-400 hover:text-red-500 transition-colors shrink-0"
+                        >
                           <XIcon className="w-4 h-4" />
                         </button>
                       )}
@@ -1428,7 +1578,7 @@ function DoctorPostMeetingView({
               >
                 <input
                   value={followUp}
-                  onChange={e => setFollowUp(e.target.value)}
+                  onChange={(e) => setFollowUp(e.target.value)}
                   disabled={submitted}
                   placeholder="ex. Regressar em 4 semanas, ou marcar se os sintomas piorarem"
                   className={inputCls}
@@ -1445,13 +1595,18 @@ function DoctorPostMeetingView({
                     <div key={i} className="flex gap-2 items-center">
                       <input
                         value={item}
-                        onChange={e => updateWhenToSeekCare(i, e.target.value)}
+                        onChange={(e) =>
+                          updateWhenToSeekCare(i, e.target.value)
+                        }
                         disabled={submitted}
                         placeholder="Sinal de alerta…"
                         className={`flex-1 ${inputCls}`}
                       />
                       {!submitted && (
-                        <button onClick={() => removeWhenToSeekCare(i)} className="text-stone-400 hover:text-red-500 transition-colors shrink-0">
+                        <button
+                          onClick={() => removeWhenToSeekCare(i)}
+                          className="text-stone-400 hover:text-red-500 transition-colors shrink-0"
+                        >
                           <XIcon className="w-4 h-4" />
                         </button>
                       )}
@@ -1471,8 +1626,16 @@ function DoctorPostMeetingView({
 
             {!submitted && (
               <div className="px-6 py-4 border-t border-stone-100 shrink-0">
-                {saveError && <p className="text-sm text-red-500 mb-3">{saveError}</p>}
+                {saveError && (
+                  <p className="text-sm text-red-500 mb-3">{saveError}</p>
+                )}
                 <div className="flex items-center gap-3 flex-wrap">
+                  <button
+                    onClick={onBack}
+                    className="px-5 py-2.5 text-stone-500 hover:text-stone-900 rounded-full text-sm font-medium transition-colors border border-stone-200 bg-white"
+                  >
+                    Voltar às consultas
+                  </button>
                   <button
                     onClick={handleGenerate}
                     disabled={generating || saving}
@@ -1582,7 +1745,9 @@ function DoctorPostMeetingView({
                     <ul className="space-y-1">
                       {profile.medications.map((m, i) => (
                         <li key={i} className="text-xs text-stone-700">
-                          {m.name}{m.dose ? ` ${m.dose}` : ""}{m.frequency ? ` · ${m.frequency}` : ""}
+                          {m.name}
+                          {m.dose ? ` ${m.dose}` : ''}
+                          {m.frequency ? ` · ${m.frequency}` : ''}
                         </li>
                       ))}
                     </ul>
@@ -1593,8 +1758,14 @@ function DoctorPostMeetingView({
                     <p className="text-xs text-stone-400 mb-1">Alergias</p>
                     <ul className="space-y-1">
                       {profile.allergies.map((a, i) => (
-                        <li key={i} className={`text-xs font-medium ${a.severity === "severe" ? "text-red-600" : a.severity === "moderate" ? "text-orange-500" : "text-stone-700"}`}>
-                          {a.substance} <span className="font-normal text-stone-400">({a.severity})</span>
+                        <li
+                          key={i}
+                          className={`text-xs font-medium ${a.severity === 'severe' ? 'text-red-600' : a.severity === 'moderate' ? 'text-orange-500' : 'text-stone-700'}`}
+                        >
+                          {a.substance}{' '}
+                          <span className="font-normal text-stone-400">
+                            ({a.severity})
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -1605,7 +1776,9 @@ function DoctorPostMeetingView({
                     <p className="text-xs text-stone-400 mb-1">Condições</p>
                     <ul className="space-y-0.5">
                       {profile.conditions.map((c, i) => (
-                        <li key={i} className="text-xs text-stone-700">{c}</li>
+                        <li key={i} className="text-xs text-stone-700">
+                          {c}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -1657,7 +1830,7 @@ function FormInput({
       <label className="text-xs text-stone-400 mb-1 block">{label}</label>
       <input
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder={placeholder}
         className="w-full px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-sm text-stone-800 placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-orange-400/50 focus:border-transparent disabled:opacity-60 disabled:cursor-default"
@@ -1670,6 +1843,7 @@ function DoctorMeetingRoom({
   meeting,
   patient,
   token,
+  currentUser,
   localVideoRef,
   remoteVideoRef,
   connState,
@@ -1684,6 +1858,7 @@ function DoctorMeetingRoom({
   meeting: Meeting;
   patient: User | null;
   token: string;
+  currentUser: User;
   localVideoRef: RefObject<HTMLVideoElement | null>;
   remoteVideoRef: RefObject<HTMLVideoElement | null>;
   connState: ConnState;
@@ -1727,27 +1902,25 @@ function DoctorMeetingRoom({
       className="flex flex-col h-screen text-black"
       style={{ background: '#ffffff' }}
     >
-      {/* Top — no bar, just text with breathing room */}
-      <div className="flex items-center justify-between px-8 pt-7 pb-0 shrink-0">
-        <div>
-          <p className="font-semibold text-black">{patientName}</p>
-          <p className="text-xs text-black/40 mt-0.5">{meeting.title}</p>
-        </div>
-        <div className="flex items-center gap-6">
-          <span className="text-xs text-black/20">
-            Conformidade HIPAA · Encriptado
-          </span>
-          <button
-            onClick={onEndCall}
-            className="px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
-          >
-            <DoorOpen className="w-4 h-4" /> Terminar consulta
-          </button>
-        </div>
-      </div>
+      <Nav
+        user={currentUser}
+        token={token}
+        wide
+        center={
+          <div className="flex items-end justify-end w-full gap-2 min-w-0">
+            <button
+              onClick={onEndCall}
+              className="px-3 py-3.5 rounded-full max-h-5 bg-[#b5471b] text-white text-xs% font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            >
+              <DoorOpen className="w-4 h-4" /> Terminar
+            </button>
+          </div>
+        }
+      />
+      <div className="h-26 shrink-0" />
 
       {/* Main */}
-      <div className="flex flex-1 gap-5 p-6 overflow-hidden">
+      <div className="flex flex-1 gap-5 px-6 pb-6 overflow-hidden">
         {/* Left: Video + Transcript */}
         <div
           className="flex flex-col gap-4 self-stretch overflow-hidden"
@@ -1847,6 +2020,13 @@ function DoctorMeetingRoom({
 
         {/* Right: Patient Intake + AI Suggestions */}
         <div className="w-full flex flex-col gap-3 overflow-hidden">
+          {/* End call */}
+          <div className="flex items-center justify-between shrink-0">
+            <div>
+              <p className="text-sm font-semibold text-black">{patientName}</p>
+              <p className="text-xs text-black/40">{meeting.title}</p>
+            </div>
+          </div>
           {/* Patient intake */}
           {meeting.patient_intake ? (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
@@ -1954,10 +2134,13 @@ function SuggestionCard({
 
   const iconClass = isFlag ? 'text-[#b5471b]' : 'text-orange-500';
   const typeLabel =
-    suggestion.type === 'question' ? 'Pergunta' :
-    suggestion.type === 'action'   ? 'Ação'     :
-    suggestion.type === 'flag'     ? 'Alerta'   :
-    suggestion.type[0].toUpperCase() + suggestion.type.slice(1);
+    suggestion.type === 'question'
+      ? 'Pergunta'
+      : suggestion.type === 'action'
+        ? 'Ação'
+        : suggestion.type === 'flag'
+          ? 'Alerta'
+          : suggestion.type[0].toUpperCase() + suggestion.type.slice(1);
 
   return (
     <div
@@ -2001,6 +2184,8 @@ function SuggestionCard({
 
 function PatientMeetingRoom({
   doctor,
+  token,
+  currentUser,
   localVideoRef,
   remoteVideoRef,
   connState,
@@ -2012,6 +2197,8 @@ function PatientMeetingRoom({
   onEndCall,
 }: {
   doctor: User | null;
+  token: string;
+  currentUser: User;
   localVideoRef: RefObject<HTMLVideoElement | null>;
   remoteVideoRef: RefObject<HTMLVideoElement | null>;
   connState: ConnState;
@@ -2064,22 +2251,23 @@ function PatientMeetingRoom({
         </div>
       )}
 
-      {/* Top status overlay — glass capsule floating */}
-      <div className="relative z-10 flex justify-center pt-5">
-        <div className="flex items-center gap-3 bg-black/25 backdrop-blur-xl rounded-full px-5 py-2.5 border border-white/10">
-          <span className="font-semibold text-white text-sm">cura</span>
-          <span
-            className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? 'bg-white/70' : 'bg-white/20'}`}
-          />
-          <span className="text-white/50 text-xs">
-            {isConnected
-              ? `Ligado · ${formatElapsed(elapsedSeconds)}`
-              : connState === 'waiting'
-                ? `À espera de ${doctorName}…`
-                : 'A ligar…'}
-          </span>
-        </div>
-      </div>
+      {/* Standard nav */}
+      <Nav
+        user={currentUser}
+        token={token}
+        wide
+        center={
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-sm text-white/80 truncate">
+              {doctorName}
+            </span>
+            <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
+            <span className="text-xs text-white/50 shrink-0">
+              {isConnected ? formatElapsed(elapsedSeconds) : 'A ligar…'}
+            </span>
+          </div>
+        }
+      />
 
       {/* Transcription notice */}
       <div className="relative z-10 flex justify-center mt-3">
@@ -2159,9 +2347,11 @@ function PatientMeetingRoom({
 function PatientPreMeetingView({
   meeting,
   token,
+  currentUser,
 }: {
   meeting: Meeting;
   token: string;
+  currentUser: User;
 }) {
   const [timeUntil, setTimeUntil] = useState(() => getTimeUntilStart(meeting));
   const [reason, setReason] = useState('');
@@ -2212,7 +2402,9 @@ function PatientPreMeetingView({
       );
       setSubmitted(true);
     } catch {
-      setSubmitError('Não foi possível guardar as suas informações. Por favor, tente novamente.');
+      setSubmitError(
+        'Não foi possível guardar as suas informações. Por favor, tente novamente.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -2220,19 +2412,7 @@ function PatientPreMeetingView({
 
   return (
     <div className="relative flex flex-col h-screen bg-[#2a1200] text-white overflow-y-auto">
-      {/* Top bar — matches PatientMeetingRoom */}
-      <div className="relative z-10 flex items-center justify-between px-5 py-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-white text-sm">Cura</span>
-          <span className="w-2 h-2 rounded-full bg-orange-400" />
-          <span className="text-white/70 text-xs">Consulta agendada</span>
-        </div>
-        {timeUntil && (
-          <span className="text-white/60 text-xs tabular-nums">
-            em {timeUntil}
-          </span>
-        )}
-      </div>
+      <Nav user={currentUser} token={token} />
 
       <div className="flex flex-col items-center gap-6 max-w-lg w-full mx-auto px-6 pb-12 pt-6 text-center">
         {/* Doctor info */}
@@ -2343,12 +2523,13 @@ function PatientPostMeetingView({
   meeting: initialMeeting,
   token,
   onBack,
+  currentUser,
 }: {
   meeting: Meeting;
   token: string;
   onBack: () => void;
+  currentUser: User;
 }) {
-
   const [meeting, setMeeting] = useState(initialMeeting);
 
   useEffect(() => {
@@ -2361,7 +2542,8 @@ function PatientPostMeetingView({
     return () => clearInterval(id);
   }, [meeting.id, meeting.soap_note_submitted, token]);
 
-  const isCanceled = meeting.status === "canceled" || meeting.status === "rejected";
+  const isCanceled =
+    meeting.status === 'canceled' || meeting.status === 'rejected';
   const doctorName = meeting.doctor
     ? `Dr. ${meeting.doctor.first_name} ${meeting.doctor.last_name}`
     : 'O seu médico/a';
@@ -2388,29 +2570,23 @@ function PatientPostMeetingView({
   if (isCanceled) {
     return (
       <div className="relative flex flex-col min-h-screen bg-[#2a1200] text-white overflow-y-auto">
-        <div className="sticky top-0 z-10 flex items-center px-5 py-4 bg-[#2a1200]/90 backdrop-blur-sm border-b border-white/5">
-          <div className="flex items-center gap-2 flex-1">
-            <span className="font-semibold text-white text-sm">Cura</span>
-            <span className="w-2 h-2 rounded-full bg-stone-500" />
-            <span className="text-white/70 text-xs">Consulta cancelada</span>
-          </div>
-          <button
-            onClick={onBack}
-            className="text-white/50 hover:text-white text-xs transition-colors"
-          >
-            Voltar às consultas
-          </button>
-        </div>
-        <div className="flex flex-col items-center gap-5 max-w-lg w-full mx-auto px-6 py-10 text-center">
+        <Nav
+          user={currentUser}
+          token={token}
+          wide
+          center={
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-stone-500 shrink-0" />
+              <span className="text-sm text-white/60">Consulta cancelada</span>
+            </div>
+          }
+        />
+        <div className="flex flex-col items-center gap-5 max-w-lg w-full mx-auto px-6 pt-20 pb-10 text-center">
           <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
             <PhoneOffIcon className="w-8 h-8 text-white/50" />
           </div>
-          <p className="text-xl font-semibold text-white">
-            Consulta cancelada
-          </p>
-          <p className="text-white/50 text-sm">
-            Esta consulta foi cancelada.
-          </p>
+          <p className="text-xl font-semibold text-white">Consulta cancelada</p>
+          <p className="text-white/50 text-sm">Esta consulta foi cancelada.</p>
           <button
             onClick={onBack}
             className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors mt-2"
@@ -2425,20 +2601,18 @@ function PatientPostMeetingView({
   if (!note) {
     return (
       <div className="relative flex flex-col min-h-screen bg-[#2a1200] text-white overflow-y-auto">
-        <div className="sticky top-0 z-10 flex items-center px-5 py-4 bg-[#2a1200]/90 backdrop-blur-sm border-b border-white/5">
-          <div className="flex items-center gap-2 flex-1">
-            <span className="font-semibold text-white text-sm">Cura</span>
-            <span className="w-2 h-2 rounded-full bg-green-400" />
-            <span className="text-white/70 text-xs">Consulta concluída</span>
-          </div>
-          <button
-            onClick={onBack}
-            className="text-white/50 hover:text-white text-xs transition-colors"
-          >
-            Voltar às consultas
-          </button>
-        </div>
-        <div className="flex flex-col items-center gap-5 max-w-lg w-full mx-auto px-6 py-10 text-center">
+        <Nav
+          user={currentUser}
+          token={token}
+          wide
+          center={
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />
+              <span className="text-sm text-white/70">Consulta concluída</span>
+            </div>
+          }
+        />
+        <div className="flex flex-col items-center gap-5 max-w-lg w-full mx-auto px-6 pt-20 pb-10 text-center">
           <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
             <CheckIcon className="w-8 h-8 text-green-400" />
           </div>
@@ -2448,7 +2622,8 @@ function PatientPostMeetingView({
           </p>
           <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-white/10 px-6 py-5 w-full text-center">
             <p className="text-sm text-white/50">
-              O resumo da sua consulta aparecerá aqui assim que {doctorName} submeter as notas.
+              O resumo da sua consulta aparecerá aqui assim que {doctorName}{' '}
+              submeter as notas.
             </p>
             <p className="text-xs text-white/30 mt-2">
               Esta página verifica atualizações automaticamente.
@@ -2465,7 +2640,7 @@ function PatientPostMeetingView({
     );
   }
 
-  const hasVitals = note.vitals && Object.values(note.vitals).some(v => v);
+  const hasVitals = note.vitals && Object.values(note.vitals).some((v) => v);
   // Normalise fields: old meetings may lack these keys
   const diagnoses = note.diagnoses ?? [];
   const treatment_plan = note.treatment_plan ?? [];
@@ -2477,25 +2652,22 @@ function PatientPostMeetingView({
 
   return (
     <div className="min-h-screen bg-stone-50 text-stone-900">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 bg-white border-b border-stone-200">
-        <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
-          <div>
-            <h1 className="text-base font-semibold text-stone-900">
+      <Nav
+        user={currentUser}
+        token={token}
+        wide
+        center={
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-sm text-black/70 truncate">
               Resumo da Consulta
-            </h1>
-            <p className="text-xs text-stone-400">{dateStr}</p>
+            </span>
+            <span className="w-1 h-1 rounded-full bg-black/20 shrink-0" />
+            <span className="text-xs text-black/40 shrink-0">{dateStr}</span>
           </div>
-          <button
-            onClick={onBack}
-            className="px-4 py-1.5 text-sm font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-full transition-colors"
-          >
-            Voltar às consultas
-          </button>
-        </div>
-      </header>
+        }
+      />
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 pb-6 space-y-4">
         {/* Doctor / visit info card */}
         <div className="bg-white rounded-2xl border border-stone-200 p-5">
           <div className="flex items-center gap-4">
@@ -2513,7 +2685,9 @@ function PatientPostMeetingView({
                 Data e Hora
               </p>
               <p className="font-medium text-stone-900">{dateStr}</p>
-              <p className="text-xs text-stone-400">{timeStr} – {endTimeStr}</p>
+              <p className="text-xs text-stone-400">
+                {timeStr} – {endTimeStr}
+              </p>
             </div>
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
@@ -2522,7 +2696,9 @@ function PatientPostMeetingView({
               <p className="font-medium text-stone-900">
                 {meeting.duration} minutos
               </p>
-              <p className="text-xs text-stone-400">Consulta por Telemedicina</p>
+              <p className="text-xs text-stone-400">
+                Consulta por Telemedicina
+              </p>
             </div>
             {chiefComplaint && (
               <div className="col-span-2">
@@ -2597,10 +2773,19 @@ function PatientPostMeetingView({
           >
             <div className="space-y-0 divide-y divide-stone-100">
               {diagnoses.map((d, i) => (
-                <div key={i} className="flex items-start justify-between py-3 first:pt-0 last:pb-0">
+                <div
+                  key={i}
+                  className="flex items-start justify-between py-3 first:pt-0 last:pb-0"
+                >
                   <div>
-                    <p className="text-sm font-medium text-stone-900">{d.condition}</p>
-                    {d.icd_code && <p className="text-xs text-stone-400 mt-0.5">ICD-10: {d.icd_code}</p>}
+                    <p className="text-sm font-medium text-stone-900">
+                      {d.condition}
+                    </p>
+                    {d.icd_code && (
+                      <p className="text-xs text-stone-400 mt-0.5">
+                        ICD-10: {d.icd_code}
+                      </p>
+                    )}
                   </div>
                   <span
                     className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ml-3 ${
@@ -2644,7 +2829,9 @@ function PatientPostMeetingView({
                   <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0 mt-0.5">
                     <CheckIcon className="w-3 h-3 text-green-600" />
                   </div>
-                  <p className="text-sm text-stone-700 leading-relaxed">{item}</p>
+                  <p className="text-sm text-stone-700 leading-relaxed">
+                    {item}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -2664,8 +2851,14 @@ function PatientPostMeetingView({
                 <div key={i} className="border border-stone-200 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-medium text-sm text-stone-900">{rx.name}</p>
-                      {rx.dosage && <p className="text-xs text-stone-400 mt-0.5">{rx.dosage}</p>}
+                      <p className="font-medium text-sm text-stone-900">
+                        {rx.name}
+                      </p>
+                      {rx.dosage && (
+                        <p className="text-xs text-stone-400 mt-0.5">
+                          {rx.dosage}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right text-xs text-stone-400 shrink-0">
                       {rx.quantity && <p>{rx.quantity}</p>}
@@ -2693,7 +2886,10 @@ function PatientPostMeetingView({
           >
             <ul className="space-y-2">
               {lab_orders.map((order, i) => (
-                <li key={i} className="flex items-center gap-2 text-sm text-stone-700">
+                <li
+                  key={i}
+                  className="flex items-center gap-2 text-sm text-stone-700"
+                >
                   <span className="w-1.5 h-1.5 rounded-full bg-stone-400 shrink-0" />
                   {order}
                 </li>
@@ -2723,11 +2919,15 @@ function PatientPostMeetingView({
               </h2>
             </div>
             <p className="text-xs text-stone-500 mb-3 ml-7">
-              Contacte o seu médico/a ou dirija-se ao serviço de urgência se sentir:
+              Contacte o seu médico/a ou dirija-se ao serviço de urgência se
+              sentir:
             </p>
             <ul className="space-y-2 ml-7">
               {when_to_seek_care.map((item, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-stone-700">
+                <li
+                  key={i}
+                  className="flex items-start gap-2 text-sm text-stone-700"
+                >
                   <span className="text-red-400 mt-0.5 shrink-0">•</span>
                   {item}
                 </li>
@@ -2742,7 +2942,8 @@ function PatientPostMeetingView({
         {/* Footer */}
         <div className="bg-stone-100 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <p className="text-xs text-stone-500 leading-relaxed">
-            Tem dúvidas sobre a sua consulta? Contacte {doctorName} através do portal do doente.
+            Tem dúvidas sobre a sua consulta? Contacte {doctorName} através do
+            portal do doente.
           </p>
           <div className="flex gap-2 shrink-0">
             <button
@@ -2783,13 +2984,17 @@ function SummarySection({
         className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-stone-50 transition-colors"
       >
         <span className="text-orange-500 shrink-0">{icon}</span>
-        <span className="font-semibold text-stone-900 flex-1 text-sm">{title}</span>
+        <span className="font-semibold text-stone-900 flex-1 text-sm">
+          {title}
+        </span>
         {badge && (
           <span className="text-xs font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
             {badge}
           </span>
         )}
-        <ChevronRightIcon className={`w-4 h-4 text-stone-400 transition-transform shrink-0 ${open ? "rotate-90" : ""}`} />
+        <ChevronRightIcon
+          className={`w-4 h-4 text-stone-400 transition-transform shrink-0 ${open ? 'rotate-90' : ''}`}
+        />
       </button>
       {open && (
         <div className="px-5 pb-5 border-t border-stone-100">
@@ -3022,7 +3227,15 @@ function PhoneOffIcon({ className }: { className?: string }) {
 
 function HeartPulseIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.3 1.5 4.05 3 5.5l7 7z" />
       <path d="M3.22 12H9.5l1.5-2 2 4 2-2h3.78" />
     </svg>
@@ -3031,7 +3244,15 @@ function HeartPulseIcon({ className }: { className?: string }) {
 
 function ClipboardIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="9" y="2" width="6" height="4" rx="1" />
       <path d="M9 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2h-3" />
     </svg>
@@ -3040,7 +3261,15 @@ function ClipboardIcon({ className }: { className?: string }) {
 
 function ClipboardCheckIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="9" y="2" width="6" height="4" rx="1" />
       <path d="M9 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2h-3" />
       <polyline points="9 12 11 14 15 10" />
@@ -3050,7 +3279,15 @@ function ClipboardCheckIcon({ className }: { className?: string }) {
 
 function PillIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M10.5 20H4a2 2 0 01-2-2V6a2 2 0 012-2h16a2 2 0 012 2v2.5" />
       <path d="M16 15l5-5" />
       <path d="M19 12a3 3 0 110 6 3 3 0 010-6z" />
@@ -3060,7 +3297,15 @@ function PillIcon({ className }: { className?: string }) {
 
 function FlaskIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M9 3h6M9 3v8l-4 9h14l-4-9V3" />
       <path d="M7 15h10" />
     </svg>
@@ -3069,7 +3314,15 @@ function FlaskIcon({ className }: { className?: string }) {
 
 function CalendarIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
       <line x1="16" y1="2" x2="16" y2="6" />
       <line x1="8" y1="2" x2="8" y2="6" />
@@ -3080,7 +3333,15 @@ function CalendarIcon({ className }: { className?: string }) {
 
 function AlertTriangleIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
       <line x1="12" y1="9" x2="12" y2="13" />
       <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -3090,7 +3351,15 @@ function AlertTriangleIcon({ className }: { className?: string }) {
 
 function PlusIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
@@ -3099,7 +3368,15 @@ function PlusIcon({ className }: { className?: string }) {
 
 function XIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>

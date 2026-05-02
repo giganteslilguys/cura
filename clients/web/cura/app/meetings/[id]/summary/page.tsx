@@ -47,5 +47,5 @@ export default async function VisitSummaryPage({
     );
   }
 
-  return <SummaryView meeting={meeting} soap={meeting.soap_note as VisitSummary} />;
+  return <SummaryView meeting={meeting} soap={meeting.soap_note as VisitSummary} user={user} token={token} />;
 }
