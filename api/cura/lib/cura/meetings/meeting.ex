@@ -25,6 +25,8 @@ defmodule Cura.Meetings.Meeting do
       default: :scheduled
 
     field :patient_intake, :map
+    field :soap_note, :map
+    field :soap_note_submitted, :boolean, default: false
 
     timestamps()
   end
@@ -104,6 +106,15 @@ defmodule Cura.Meetings.Meeting do
     meeting
     |> cast(attrs, [:notes])
     |> validate_notes_length()
+  end
+
+  def soap_note_changeset(meeting, attrs) do
+    note = attrs["soap_note"] || attrs[:soap_note] || %{}
+    submit = attrs["submit"] == true || attrs[:submit] == true
+
+    update_attrs = %{soap_note: note}
+    final_attrs = if submit, do: Map.put(update_attrs, :soap_note_submitted, true), else: update_attrs
+    cast(meeting, final_attrs, [:soap_note, :soap_note_submitted])
   end
 
   def intake_changeset(meeting, attrs) do

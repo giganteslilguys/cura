@@ -19,4 +19,10 @@ defmodule CuraWeb.FallbackController do
     |> put_status(:unauthorized)
     |> json(%{error: "unauthorized"})
   end
+
+  def call(conn, {:error, :unprocessable_entity}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "unprocessable entity"})
+  end
 end

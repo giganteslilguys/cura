@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { Meeting, PatientIntake } from "./types";
+import type { Meeting, PatientIntake, VisitSummary, TranscriptEntry } from "./types";
 
 export function listMeetings(token: string): Promise<{ meetings: Meeting[] }> {
   return apiFetch<{ meetings: Meeting[] }>("/api/meetings", {
@@ -39,5 +39,28 @@ export function submitMeetingIntake(
     method: "PATCH",
     body: { patient_intake: intake },
     token,
+  });
+}
+
+export function saveVisitSummary(
+  id: string,
+  note: VisitSummary,
+  submit: boolean,
+  token: string,
+): Promise<{ meeting: Meeting }> {
+  return apiFetch<{ meeting: Meeting }>(`/api/meetings/${id}/soap_note`, {
+    method: "PATCH",
+    body: { soap_note: note, submit },
+    token,
+  });
+}
+
+export function getMeetingTranscript(
+  id: string,
+  token: string,
+): Promise<{ transcript: TranscriptEntry[] }> {
+  return apiFetch<{ transcript: TranscriptEntry[] }>(`/api/meetings/${id}/transcript`, {
+    token,
+    cache: "no-store",
   });
 }

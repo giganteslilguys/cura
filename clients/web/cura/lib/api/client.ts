@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { PUBLIC_API_BASE_URL } from "./config";
 import { ApiError, type ApiErrorBody } from "./errors";
 
 export type ApiFetchOptions = {
@@ -39,7 +39,7 @@ export async function apiFetch<T = unknown>(
     finalHeaders["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(joinUrl(API_BASE_URL, path), {
+  const response = await fetch(joinUrl(PUBLIC_API_BASE_URL, path), {
     method,
     headers: finalHeaders,
     body: body === undefined ? undefined : JSON.stringify(body),

@@ -62,6 +62,45 @@ export type Suggestion = {
   priority: SuggestionPriority;
 };
 
+export type Vitals = {
+  blood_pressure: string | null;
+  heart_rate: string | null;
+  temperature: string | null;
+  weight: string | null;
+};
+
+export type Diagnosis = {
+  condition: string;
+  icd_code: string | null;
+  type: "primary" | "secondary";
+};
+
+export type Prescription = {
+  name: string;
+  dosage: string | null;
+  quantity: string | null;
+  refills: string | null;
+  instructions: string | null;
+};
+
+export type VisitSummary = {
+  vitals: Vitals | null;
+  diagnoses: Diagnosis[];
+  clinical_assessment: string | null;
+  treatment_plan: string[];
+  prescriptions: Prescription[];
+  lab_orders: string[];
+  follow_up_appointment: string | null;
+  when_to_seek_care: string[];
+};
+
+export type TranscriptEntry = {
+  id: string;
+  speaker: "doctor" | "patient";
+  text: string;
+  timestamp: string;
+};
+
 export type Meeting = {
   id: string;
   title: string;
@@ -74,4 +113,6 @@ export type Meeting = {
   doctor: User | null;
   patient: User | null;
   patient_intake: PatientIntake | null;
+  soap_note: VisitSummary | null;
+  soap_note_submitted: boolean;
 };

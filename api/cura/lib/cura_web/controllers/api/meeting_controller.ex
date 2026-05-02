@@ -48,4 +48,39 @@ defmodule CuraWeb.Api.MeetingController do
       error -> error
     end
   end
+
+  def soap_note(conn, %{"id" => id} = params) do
+    user = conn.assigns.current_user
+
+    with {:ok, meeting} <- Meetings.get_meeting!(id),
+         :ok <- authorize_doctor(meeting, user.id),
+         :ok <- check_not_submitted(meeting),
+         {:ok, updated} <- Meetings.update_soap_note(meeting, params) do
+      render(conn, :show, meeting: updated)
+    end
+  end
+
+  def transcript(conn, %{"id" => id}) do
+    user = conn.assigns.current_user
+
+    with {:ok, meeting} <- Meetings.get_meeting!(id),
+         :ok <- authorize_participant(meeting, user.id) do
+      entries = Meetings.list_transcript_entries(meeting.id)
+      render(conn, :transcript, entries: entries)
+    end
+  end
+
+  defp authorize_doctor(meeting, user_id) do
+    if meeting.doctor_id == user_id, do: :ok, else: {:error, :unauthorized}
+  end
+
+  defp authorize_participant(meeting, user_id) do
+    if meeting.doctor_id == user_id or meeting.patient_id == user_id,
+      do: :ok,
+      else: {:error, :unauthorized}
+  end
+
+  defp check_not_submitted(meeting) do
+    if meeting.soap_note_submitted, do: {:error, :unprocessable_entity}, else: :ok
+  end
 end

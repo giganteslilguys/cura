@@ -8,6 +8,17 @@ defmodule CuraWeb.Api.MeetingJSON do
 
   def show(%{meeting: meeting}), do: %{meeting: data(meeting)}
 
+  def transcript(%{entries: entries}) do
+    %{transcript: Enum.map(entries, fn e ->
+      %{
+        id: e.id,
+        speaker: e.speaker,
+        text: e.text,
+        timestamp: e.inserted_at
+      }
+    end)}
+  end
+
   defp data(%Meeting{} = meeting) do
     %{
       id: meeting.id,
@@ -20,7 +31,9 @@ defmodule CuraWeb.Api.MeetingJSON do
       status: meeting.status,
       doctor: user(meeting.doctor),
       patient: user(meeting.patient),
-      patient_intake: meeting.patient_intake
+      patient_intake: meeting.patient_intake,
+      soap_note: meeting.soap_note,
+      soap_note_submitted: meeting.soap_note_submitted
     }
   end
 

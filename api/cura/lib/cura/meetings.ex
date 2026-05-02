@@ -52,6 +52,12 @@ defmodule Cura.Meetings do
     |> Repo.update()
   end
 
+  def update_soap_note(%Meeting{} = meeting, attrs) do
+    meeting
+    |> Meeting.soap_note_changeset(attrs)
+    |> Repo.update()
+  end
+
   def update_meeting(%Meeting{} = meeting, attrs) do
     meeting
     |> Meeting.changeset(attrs)
