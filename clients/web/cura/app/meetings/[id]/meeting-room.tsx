@@ -1103,37 +1103,49 @@ function DoctorPostMeetingView({
 
               {/* Diagnoses */}
               <FormSection icon={<StethoscopeIcon className="w-4 h-4" />} title="Diagnoses">
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {diagnoses.map((d, i) => (
-                    <div key={i} className="flex gap-2 items-center">
+                    <div key={i} className="border border-stone-200 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-stone-400">Diagnosis {i + 1}</span>
+                        {!submitted && (
+                          <button
+                            onClick={() => removeDiagnosis(i)}
+                            className="text-stone-400 hover:text-red-500 transition-colors"
+                            aria-label="Remove diagnosis"
+                          >
+                            <XIcon className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {/* `min-w-0` lets flex shrink/grow this input below its
+                          intrinsic 20-char size, so long diagnosis names
+                          ("Tiroidite autoimune de Hashimoto") still display. */}
                       <input
                         value={d.condition}
                         onChange={e => updateDiagnosis(i, { condition: e.target.value })}
                         disabled={submitted}
                         placeholder="Condition name"
-                        className={`flex-1 ${inputCls}`}
+                        className={`min-w-0 ${inputCls}`}
                       />
-                      <input
-                        value={d.icd_code ?? ""}
-                        onChange={e => updateDiagnosis(i, { icd_code: e.target.value || null })}
-                        disabled={submitted}
-                        placeholder="ICD-10"
-                        className={`w-24 ${inputCls}`}
-                      />
-                      <select
-                        value={d.type}
-                        onChange={e => updateDiagnosis(i, { type: e.target.value as "primary" | "secondary" })}
-                        disabled={submitted}
-                        className={`w-28 ${inputCls}`}
-                      >
-                        <option value="primary">Primary</option>
-                        <option value="secondary">Secondary</option>
-                      </select>
-                      {!submitted && (
-                        <button onClick={() => removeDiagnosis(i)} className="text-stone-400 hover:text-red-500 transition-colors shrink-0">
-                          <XIcon className="w-4 h-4" />
-                        </button>
-                      )}
+                      <div className="flex gap-2 items-center">
+                        <input
+                          value={d.icd_code ?? ""}
+                          onChange={e => updateDiagnosis(i, { icd_code: e.target.value || null })}
+                          disabled={submitted}
+                          placeholder="ICD-10"
+                          className={`max-w-20 ${inputCls}`}
+                        />
+                        <select
+                          value={d.type}
+                          onChange={e => updateDiagnosis(i, { type: e.target.value as "primary" | "secondary" })}
+                          disabled={submitted}
+                          className={`w-32 ${inputCls}`}
+                        >
+                          <option value="primary">Primary</option>
+                          <option value="secondary">Secondary</option>
+                        </select>
+                      </div>
                     </div>
                   ))}
                   {!submitted && (

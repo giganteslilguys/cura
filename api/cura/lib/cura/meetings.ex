@@ -319,7 +319,7 @@ defmodule Cura.Meetings do
         {:ok, %{status: 200, body: %{"choices" => [%{"message" => %{"content" => content}} | _]}}} ->
           cleaned = content |> String.replace(~r/^```json\s*/m, "") |> String.replace(~r/```\s*$/m, "") |> String.trim()
           case Jason.decode(cleaned) do
-            {:ok, note} -> {:ok, note}
+            {:ok, note} -> {:ok, normalize_soap_note(note)}
             err ->
               Logger.error("[SOAP] JSON parse failed: #{inspect(err)}\nContent: #{content}")
               {:error, :parse_failed}
@@ -407,4 +407,84 @@ defmodule Cura.Meetings do
         order_by: [asc: e.inserted_at]
     )
   end
+
+  # ── SOAP note normalisation ─────────────────────────────────────────────────
+  #
+  # GPT-4o-mini sometimes drifts from the requested schema: a diagnosis may
+  # come back as `{"name": "..."}` instead of `{"condition": "..."}`, or with
+  # a capitalised `type`. The frontend expects the canonical shape declared
+  # in `lib/api/types.ts`, so we normalise here — anything else and the
+  # diagnosis row renders blank.
+
+  defp normalize_soap_note(note) when is_map(note) do
+    note
+    |> Map.update("diagnoses", [], &normalize_diagnoses/1)
+    |> Map.update("prescriptions", [], &normalize_prescriptions/1)
+  end
+
+  defp normalize_soap_note(note), do: note
+
+  defp normalize_diagnoses(list) when is_list(list) do
+    list
+    |> Enum.map(&normalize_diagnosis/1)
+    |> Enum.reject(&(&1["condition"] in [nil, ""]))
+  end
+
+  defp normalize_diagnoses(_), do: []
+
+  defp normalize_diagnosis(d) when is_map(d) do
+    condition =
+      d["condition"] || d["name"] || d["diagnosis"] || d["title"] || d["label"]
+
+    type =
+      case d["type"] do
+        t when is_binary(t) ->
+          case String.downcase(t) do
+            "primary" -> "primary"
+            "secondary" -> "secondary"
+            _ -> "primary"
+          end
+
+        _ ->
+          "primary"
+      end
+
+    %{
+      "condition" => trim_or_nil(condition),
+      "icd_code" => trim_or_nil(d["icd_code"] || d["code"] || d["icd"]),
+      "type" => type
+    }
+  end
+
+  defp normalize_diagnosis(_), do: %{"condition" => nil, "icd_code" => nil, "type" => "primary"}
+
+  defp normalize_prescriptions(list) when is_list(list) do
+    list
+    |> Enum.map(&normalize_prescription/1)
+    |> Enum.reject(&(&1["name"] in [nil, ""]))
+  end
+
+  defp normalize_prescriptions(_), do: []
+
+  defp normalize_prescription(p) when is_map(p) do
+    %{
+      "name" => trim_or_nil(p["name"] || p["medication"] || p["drug"]),
+      "dosage" => trim_or_nil(p["dosage"] || p["dose"]),
+      "quantity" => trim_or_nil(p["quantity"] || p["qty"]),
+      "refills" => trim_or_nil(p["refills"]),
+      "instructions" => trim_or_nil(p["instructions"] || p["sig"])
+    }
+  end
+
+  defp normalize_prescription(_),
+    do: %{"name" => nil, "dosage" => nil, "quantity" => nil, "refills" => nil, "instructions" => nil}
+
+  defp trim_or_nil(nil), do: nil
+  defp trim_or_nil(v) when is_binary(v) do
+    case String.trim(v) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+  defp trim_or_nil(v), do: v
 end
