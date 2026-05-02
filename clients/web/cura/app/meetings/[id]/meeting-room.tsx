@@ -2,7 +2,7 @@
 
 import { Camera, CameraOff, DoorOpen, Mic, MicOff, PhoneOff, Sparkles, Video, VideoOff } from "lucide-react";
 import { Channel, Socket } from "phoenix";
-import type { Meeting, User } from "@/lib/api/types";
+import type { Meeting, Suggestion, User } from "@/lib/api/types";
 import { RefObject, useEffect, useRef, useState } from "react";
 
 import { PUBLIC_SOCKET_URL } from "@/lib/api/config";
@@ -63,12 +63,6 @@ function getTimeUntilStart(meeting: Meeting): string | null {
   return `${s}s`;
 }
 
-const MOCK_SUGGESTIONS = [
-  { id: 1, text: "Consider asking about sleep quality — fatigue mentioned" },
-  { id: 2, text: "Confirm medication adherence" },
-  { id: 3, text: "BP slightly elevated — discuss stress levels" },
-];
-
 export function MeetingRoom({ meeting, currentUser, token }: Props) {
   const router = useRouter();
 
@@ -87,6 +81,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
   const [connState, setConnState] = useState<ConnState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [phase, setPhase] = useState<MeetingPhase>(() => getMeetingPhase(meeting));
 
   const isDoctor = currentUser.role === "doctor";
@@ -239,6 +234,17 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         const date = new Date(timestamp);
         const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         setTranscript((prev) => [...prev, { time, text, speaker }]);
+      });
+
+      // Append-only running checklist. Backend already dedupes against prior
+      // items before broadcasting, so we just concatenate in arrival order.
+      convChannel.on("suggestions_update", ({ suggestions: incoming }: { suggestions: Suggestion[] }) => {
+        if (cancelled || !Array.isArray(incoming) || incoming.length === 0) return;
+        setSuggestions((prev) => {
+          const seen = new Set(prev.map((s) => s.id));
+          const fresh = incoming.filter((s) => !seen.has(s.id));
+          return fresh.length === 0 ? prev : [...prev, ...fresh];
+        });
       });
 
       convChannel.join();
@@ -401,6 +407,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         videoOff={videoOff}
         error={error}
         transcript={transcript}
+        suggestions={suggestions}
         onToggleMute={toggleMute}
         onToggleVideo={toggleVideo}
         onEndCall={endCall}
@@ -442,6 +449,7 @@ function DoctorMeetingRoom({
   videoOff,
   error,
   transcript,
+  suggestions,
   onToggleMute,
   onToggleVideo,
   onEndCall,
@@ -455,11 +463,12 @@ function DoctorMeetingRoom({
   videoOff: boolean;
   error: string | null;
   transcript: TranscriptEntry[];
+  suggestions: Suggestion[];
   onToggleMute: () => void;
   onToggleVideo: () => void;
   onEndCall: () => void;
 }) {
-  const [doneSuggestions, setDoneSuggestions] = useState<Set<number>>(new Set());
+  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(new Set());
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -467,7 +476,7 @@ function DoctorMeetingRoom({
     if (el) el.scrollTop = el.scrollHeight;
   }, [transcript]);
 
-  const toggleSuggestion = (id: number) => {
+  const toggleSuggestion = (id: string) => {
     setDoneSuggestions((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -647,55 +656,21 @@ function DoctorMeetingRoom({
             </div>
 
             <div className="flex flex-col gap-3">
-              {MOCK_SUGGESTIONS.map((suggestion) => (
-                <div
-                  key={suggestion.id}
-                  className={`p-3 rounded-xl border transition-opacity ${
-                    doneSuggestions.has(suggestion.id)
-                      ? "opacity-40 bg-stone-50 border-stone-100"
-                      : "bg-stone-50 border-stone-100"
-                  }`}
-                >
-                  <div className="flex items-start gap-2 mb-2.5">
-                    <SparkleIcon className="w-3.5 h-3.5 text-orange-500 mt-0.5 shrink-0" />
-                    <p className="text-xs text-stone-700 leading-relaxed">{suggestion.text}</p>
-                  </div>
-                  <div className="flex gap-4 pl-5">
-                    <button
-                      onClick={() => toggleSuggestion(suggestion.id)}
-                      className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors"
-                    >
-                      <CheckIcon className="w-3 h-3" />
-                      Done
-                    </button>
-                    <button className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors">
-                      <ChevronRightIcon className="w-3 h-3" />
-                      More
-                    </button>
-                  </div>
-                </div>
-              ))}
+              {suggestions.length === 0 ? (
+                <p className="text-xs text-stone-400 italic">
+                  Suggestions will appear as the conversation progresses.
+                </p>
+              ) : (
+                suggestions.map((suggestion) => (
+                  <SuggestionCard
+                    key={suggestion.id}
+                    suggestion={suggestion}
+                    done={doneSuggestions.has(suggestion.id)}
+                    onToggle={() => toggleSuggestion(suggestion.id)}
+                  />
+                ))
+              )}
             </div>
-            <p className="text-xs text-black/30 ml-5">Real-time guidance</p>
-          </div>
-
-          <div className="flex flex-col gap-5">
-            {MOCK_SUGGESTIONS.map((suggestion) => (
-              <div
-                key={suggestion.id}
-                className={`transition-opacity ${
-                  doneSuggestions.has(suggestion.id) ? "opacity-20" : ""
-                }`}
-              >
-                <p className="text-sm text-black leading-relaxed">{suggestion.text}</p>
-                <button
-                  onClick={() => toggleSuggestion(suggestion.id)}
-                  className="mt-1.5 text-xs text-black/30 hover:text-black transition-colors"
-                >
-                  {doneSuggestions.has(suggestion.id) ? "Undo" : "Mark done"}
-                </button>
-              </div>
-            ))}
           </div>
 
           <button className="text-sm text-[#811824] font-medium text-left hover:opacity-70 transition-opacity mt-auto">
@@ -709,6 +684,65 @@ function DoctorMeetingRoom({
           {error}
         </div>
       )}
+    </div>
+  );
+}
+
+function SuggestionCard({
+  suggestion,
+  done,
+  onToggle,
+}: {
+  suggestion: Suggestion;
+  done: boolean;
+  onToggle: () => void;
+}) {
+  // Flags carry safety weight, so they get a distinct red treatment regardless
+  // of priority. Questions and actions follow priority-based emphasis.
+  const isFlag = suggestion.type === "flag";
+  const isHigh = suggestion.priority === "high";
+
+  const cardClass = isFlag
+    ? "bg-[#811824]/5 border-[#811824]/20"
+    : isHigh
+    ? "bg-orange-50 border-orange-200"
+    : "bg-stone-50 border-stone-100";
+
+  const iconClass = isFlag ? "text-[#811824]" : "text-orange-500";
+  const typeLabel = suggestion.type[0].toUpperCase() + suggestion.type.slice(1);
+
+  return (
+    <div className={`p-3 rounded-xl border transition-opacity ${cardClass} ${done ? "opacity-40" : ""}`}>
+      <div className="flex items-start gap-2 mb-1.5">
+        <SparkleIcon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${iconClass}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className={`text-[10px] font-semibold uppercase tracking-wider ${iconClass}`}>
+              {typeLabel}
+            </span>
+            {suggestion.priority !== "medium" && (
+              <span className="text-[10px] text-stone-400 uppercase tracking-wider">
+                · {suggestion.priority}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-stone-800 leading-relaxed font-medium">
+            {suggestion.text}
+          </p>
+          <p className="text-[11px] text-stone-500 leading-snug mt-1">
+            {suggestion.rationale}
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-4 pl-5 mt-1.5">
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors"
+        >
+          <CheckIcon className="w-3 h-3" />
+          {done ? "Undo" : "Done"}
+        </button>
+      </div>
     </div>
   );
 }

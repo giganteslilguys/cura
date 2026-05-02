@@ -3,6 +3,7 @@ defmodule CuraWeb.ConversationChannel do
 
   require Logger
 
+  alias Cura.Conversation.GeminiClient
   alias Cura.Conversation.RoomStore
   alias Cura.Conversation.WhisperClient
   alias Cura.Meetings
@@ -22,7 +23,7 @@ defmodule CuraWeb.ConversationChannel do
         :duplicate ->
           Logger.info("[Channel] room=#{room_id} duplicate transcript, skipping")
 
-        _ ->
+        result ->
           speaker = socket.assigns.current_user.role
           Logger.info("[Channel] room=#{room_id} speaker=#{speaker} transcribed=\"#{text}\"")
 
@@ -33,8 +34,20 @@ defmodule CuraWeb.ConversationChannel do
           })
 
           case Meetings.save_transcript_entry(room_id, speaker, text) do
-            {:error, reason} -> Logger.error("[Channel] failed to save transcript entry: #{inspect(reason)}")
-            _ -> :ok
+            {:error, reason} ->
+              Logger.error("[Channel] failed to save transcript entry: #{inspect(reason)}")
+
+            _ ->
+              :ok
+          end
+
+          case result do
+            {:trigger, transcript, prior_suggestions, order_id} ->
+              Logger.info("[Channel] room=#{room_id} triggering Gemini order=#{order_id}")
+              GeminiClient.suggest_async(room_id, transcript, prior_suggestions, order_id)
+
+            :noop ->
+              :ok
           end
       end
 

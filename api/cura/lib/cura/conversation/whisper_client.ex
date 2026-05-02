@@ -26,20 +26,25 @@ defmodule Cura.Conversation.WhisperClient do
     Logger.info("[ElevenLabs STT] transcribing size=#{byte_size(audio_binary)}B")
 
     try do
+      # tag_audio_events=false stops Scribe from emitting "(traffic sounds)",
+      # "(mic adjustment)", "(cough)" and similar non-speech annotations. We
+      # only want the spoken transcription.
       multipart =
         {:multipart,
          [
            {:file, tmp_path, {"form-data", [name: "file", filename: "audio.webm"]},
             [{"Content-Type", "audio/webm"}]},
            {"model_id", @model},
-           {"language_code", "pt"}
+           {"language_code", "pt"},
+           {"tag_audio_events", "false"}
          ]}
 
       headers = [{"xi-api-key", api_key}]
 
       case HTTPoison.post(@url, multipart, headers, recv_timeout: 120_000) do
         {:ok, %{status_code: 200, body: body}} ->
-          text = body |> Jason.decode!() |> Map.fetch!("text") |> String.trim()
+          raw = body |> Jason.decode!() |> Map.fetch!("text") |> String.trim()
+          text = strip_audio_events(raw)
 
           hallucination? = Enum.any?(@hallucinations, &String.contains?(text, &1))
 
@@ -64,4 +69,17 @@ defmodule Cura.Conversation.WhisperClient do
   end
 
   def transcribe(_), do: {:error, :empty_audio}
+
+  # Defense-in-depth: even with tag_audio_events=false, strip anything
+  # wrapped in (...) or [...] from the transcription. Spoken Portuguese
+  # never produces parentheticals — they're always a transcription
+  # convention for non-speech events. Collapses extra whitespace left
+  # behind by the strip.
+  defp strip_audio_events(text) do
+    text
+    |> String.replace(~r/\([^)]*\)/u, "")
+    |> String.replace(~r/\[[^\]]*\]/u, "")
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+  end
 end

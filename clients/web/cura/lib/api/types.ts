@@ -50,6 +50,18 @@ export type PatientIntake = {
   notes: string | null;
 };
 
+export type SuggestionType = "question" | "action" | "flag";
+
+export type SuggestionPriority = "high" | "medium" | "low";
+
+export type Suggestion = {
+  id: string;
+  type: SuggestionType;
+  text: string;
+  rationale: string;
+  priority: SuggestionPriority;
+};
+
 export type Meeting = {
   id: string;
   title: string;
