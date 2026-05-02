@@ -40,6 +40,12 @@ defmodule Cura.Meetings do
     |> Repo.insert()
   end
 
+  def update_intake(%Meeting{} = meeting, attrs) do
+    meeting
+    |> Meeting.intake_changeset(attrs)
+    |> Repo.update()
+  end
+
   def update_meeting(%Meeting{} = meeting, attrs) do
     meeting
     |> Meeting.changeset(attrs)

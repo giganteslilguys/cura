@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, RefObject } from "react";
 import { Channel, Socket } from "phoenix";
 
 import { PUBLIC_SOCKET_URL } from "@/lib/api/config";
-import type { Meeting, User } from "@/lib/api/types";
+import { submitMeetingIntake } from "@/lib/api/meetings";
+import type { Meeting, PatientIntake, User } from "@/lib/api/types";
 
 const PC_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -32,6 +33,36 @@ type PresenceState = Record<string, { metas: Array<Record<string, unknown>> }>;
 
 type TranscriptEntry = { time: string; text: string; speaker: "doctor" | "patient" };
 
+type MeetingPhase = "pre" | "active" | "post";
+
+function getMeetingPhase(meeting: Meeting): MeetingPhase {
+  if (
+    meeting.status === "completed" ||
+    meeting.status === "canceled" ||
+    meeting.status === "rejected"
+  ) {
+    return "post";
+  }
+  const now = Date.now();
+  const start = new Date(`${meeting.date}T${meeting.time}`).getTime();
+  const end = start + meeting.duration * 60 * 1000;
+  if (now < start) return "pre";
+  if (now >= end) return "post";
+  return "active";
+}
+
+function getTimeUntilStart(meeting: Meeting): string | null {
+  const start = new Date(`${meeting.date}T${meeting.time}`).getTime();
+  const diff = start - Date.now();
+  if (diff <= 0) return null;
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  const s = Math.floor((diff % 60_000) / 1_000);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 const MOCK_SUGGESTIONS = [
   { id: 1, text: "Consider asking about sleep quality — fatigue mentioned" },
   { id: 2, text: "Confirm medication adherence" },
@@ -56,15 +87,27 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
   const [connState, setConnState] = useState<ConnState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
+  const [phase, setPhase] = useState<MeetingPhase>(() => getMeetingPhase(meeting));
 
   const isDoctor = currentUser.role === "doctor";
   const otherParticipant = isDoctor ? meeting.patient : meeting.doctor;
+
+  // Re-evaluate phase every 5 s so the view auto-transitions without a reload.
+  useEffect(() => {
+    if (phase === "post") return;
+    const id = setInterval(() => {
+      const next = getMeetingPhase(meeting);
+      if (next !== phase) setPhase(next);
+    }, 5_000);
+    return () => clearInterval(id);
+  }, [phase, meeting]);
 
   // Deterministic caller: lower user id makes the offer, the other side
   // answers. No glare possible, no perfect-negotiation choreography needed.
   const isCaller = currentUser.id < (otherParticipant?.id ?? "￿");
 
   useEffect(() => {
+    if (phase !== "active") return;
     let cancelled = false;
     let peerPresent = false;
     let didCall = false;
@@ -339,7 +382,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       localStreamRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [phase]);
 
   const toggleMute = () => {
     const audio = localStreamRef.current?.getAudioTracks()[0];
@@ -374,6 +417,14 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         onEndCall={endCall}
       />
     );
+  }
+
+  if (phase === "pre") {
+    return <PatientPreMeetingView meeting={meeting} token={token} />;
+  }
+
+  if (phase === "post") {
+    return <PatientPostMeetingView meeting={meeting} onBack={endCall} />;
   }
 
   return (
@@ -594,8 +645,39 @@ function DoctorMeetingRoom({
           </div>
         </div>
 
-        {/* Right: AI Suggestions */}
+        {/* Right: Patient Intake + AI Suggestions */}
         <aside className="w-72 shrink-0 flex flex-col gap-3 overflow-hidden">
+          {/* Patient intake */}
+          {meeting.patient_intake ? (
+            <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
+              <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
+                Patient intake
+              </p>
+              <div className="flex flex-col gap-2">
+                <div>
+                  <p className="text-xs text-stone-400 mb-0.5">Reason</p>
+                  <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.reason}</p>
+                </div>
+                {meeting.patient_intake.symptoms && (
+                  <div>
+                    <p className="text-xs text-stone-400 mb-0.5">Symptoms</p>
+                    <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.symptoms}</p>
+                  </div>
+                )}
+                {meeting.patient_intake.notes && (
+                  <div>
+                    <p className="text-xs text-stone-400 mb-0.5">Notes</p>
+                    <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.notes}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-stone-50 rounded-xl border border-stone-200 px-4 py-3 shrink-0">
+              <p className="text-xs text-stone-400 italic">Patient has not filled in pre-visit information yet.</p>
+            </div>
+          )}
+
           <div className="flex-1 bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-4 overflow-y-auto">
             <div>
               <div className="flex items-center gap-2 mb-0.5">
@@ -800,6 +882,246 @@ function PatientMeetingRoom({
           {error}
         </div>
       )}
+    </div>
+  );
+}
+
+function PatientPreMeetingView({
+  meeting,
+  token,
+}: {
+  meeting: Meeting;
+  token: string;
+}) {
+  const [timeUntil, setTimeUntil] = useState(() => getTimeUntilStart(meeting));
+  const [reason, setReason] = useState("");
+  const [symptoms, setSymptoms] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitted, setSubmitted] = useState(() => meeting.patient_intake !== null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = setInterval(() => setTimeUntil(getTimeUntilStart(meeting)), 1_000);
+    return () => clearInterval(id);
+  }, [meeting]);
+
+  const start = new Date(`${meeting.date}T${meeting.time}`);
+  const dateStr = start.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  const timeStr = start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const doctorName = meeting.doctor
+    ? `Dr. ${meeting.doctor.first_name} ${meeting.doctor.last_name}`
+    : "Your Doctor";
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reason.trim()) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await submitMeetingIntake(
+        meeting.id,
+        { reason: reason.trim(), symptoms: symptoms.trim() || null, notes: notes.trim() || null },
+        token,
+      );
+      setSubmitted(true);
+    } catch {
+      setSubmitError("Failed to save your information. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="relative flex flex-col h-screen bg-[#2a1200] text-white overflow-y-auto">
+      {/* Top bar — matches PatientMeetingRoom */}
+      <div className="relative z-10 flex items-center justify-between px-5 py-4 shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-white text-sm">Cura</span>
+          <span className="w-2 h-2 rounded-full bg-orange-400" />
+          <span className="text-white/70 text-xs">Appointment scheduled</span>
+        </div>
+        {timeUntil && (
+          <span className="text-white/60 text-xs tabular-nums">in {timeUntil}</span>
+        )}
+      </div>
+
+      <div className="flex flex-col items-center gap-6 max-w-lg w-full mx-auto px-6 pb-12 pt-6 text-center">
+        {/* Doctor info */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-20 h-20 rounded-full bg-orange-600 flex items-center justify-center">
+            <PersonIcon className="w-10 h-10 text-white" />
+          </div>
+          <div>
+            <p className="font-semibold text-white text-lg">{doctorName}</p>
+            <p className="text-white/50 text-sm mt-0.5">{meeting.title}</p>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-white/50">
+            <span>{dateStr}</span>
+            <span className="text-white/20">·</span>
+            <span className="text-orange-400 font-semibold">{timeStr}</span>
+          </div>
+        </div>
+
+        {/* Form or confirmation */}
+        {submitted ? (
+          <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-white/10 px-8 py-8 w-full flex flex-col items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+              <CheckIcon className="w-6 h-6 text-green-400" />
+            </div>
+            <p className="font-semibold text-white">Information sent to your doctor</p>
+            <p className="text-white/50 text-sm">
+              This page will open automatically when your appointment begins.
+            </p>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleSubmit}
+            className="bg-black/40 backdrop-blur-sm rounded-2xl border border-white/10 px-8 py-6 w-full text-left flex flex-col gap-5"
+          >
+            <div>
+              <p className="text-xs font-semibold tracking-widest text-white/40 uppercase mb-1">
+                Before your visit
+              </p>
+              <p className="text-white/60 text-sm">
+                Help your doctor prepare by sharing a few details.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-white/80">
+                Reason for visit <span className="text-orange-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. Annual check-up, follow-up on blood pressure"
+                maxLength={500}
+                required
+                className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-transparent"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-white/80">Symptoms</label>
+              <textarea
+                value={symptoms}
+                onChange={(e) => setSymptoms(e.target.value)}
+                placeholder="Describe any symptoms you're experiencing"
+                maxLength={1000}
+                rows={3}
+                className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-transparent resize-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-white/80">Additional notes</label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Medications, allergies, or anything else your doctor should know"
+                maxLength={1000}
+                rows={3}
+                className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-transparent resize-none"
+              />
+            </div>
+
+            {submitError && (
+              <p className="text-sm text-red-400">{submitError}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting || !reason.trim()}
+              className="w-full py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full text-sm font-semibold transition-colors"
+            >
+              {submitting ? "Saving…" : "Send to doctor"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PatientPostMeetingView({
+  meeting,
+  onBack,
+}: {
+  meeting: Meeting;
+  onBack: () => void;
+}) {
+  const isCanceled = meeting.status === "canceled" || meeting.status === "rejected";
+  const doctorName = meeting.doctor
+    ? `Dr. ${meeting.doctor.first_name} ${meeting.doctor.last_name}`
+    : "Your Doctor";
+  const start = new Date(`${meeting.date}T${meeting.time}`);
+  const dateStr = start.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  return (
+    <div className="relative flex flex-col h-screen bg-[#2a1200] text-white items-center justify-center p-8">
+      {/* Top bar — matches PatientMeetingRoom */}
+      <div className="absolute top-0 left-0 right-0 flex items-center px-5 py-4">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-white text-sm">Cura</span>
+          <span className={`w-2 h-2 rounded-full ${isCanceled ? "bg-stone-500" : "bg-green-400"}`} />
+          <span className="text-white/70 text-xs">
+            {isCanceled ? "Appointment canceled" : "Appointment ended"}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center gap-6 max-w-md w-full text-center">
+        <div className={`w-20 h-20 rounded-full flex items-center justify-center ${
+          isCanceled ? "bg-white/10" : "bg-white/10"
+        }`}>
+          {isCanceled ? (
+            <PhoneOffIcon className="w-9 h-9 text-white/50" />
+          ) : (
+            <CheckIcon className="w-9 h-9 text-green-400" />
+          )}
+        </div>
+
+        <div>
+          <p className="text-xl font-semibold text-white">
+            {isCanceled ? "Appointment canceled" : "Visit complete"}
+          </p>
+          <p className="text-white/50 text-sm mt-1">
+            {isCanceled
+              ? "This appointment was canceled."
+              : `Your visit with ${doctorName} has ended.`}
+          </p>
+        </div>
+
+        <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-white/10 px-8 py-5 w-full text-left">
+          <p className="text-xs font-semibold tracking-widest text-white/40 uppercase mb-3">
+            Details
+          </p>
+          <p className="text-white font-medium text-sm">{meeting.title}</p>
+          <p className="text-white/40 text-xs mt-1">
+            {dateStr} · {meeting.duration} min
+          </p>
+          {!isCanceled && (
+            <p className="text-white/50 text-sm mt-2">with {doctorName}</p>
+          )}
+        </div>
+
+        <button
+          onClick={onBack}
+          className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors"
+        >
+          Back to appointments
+        </button>
+      </div>
     </div>
   );
 }

@@ -19,7 +19,8 @@ defmodule CuraWeb.Api.MeetingJSON do
       timezone: meeting.timezone,
       status: meeting.status,
       doctor: user(meeting.doctor),
-      patient: user(meeting.patient)
+      patient: user(meeting.patient),
+      patient_intake: meeting.patient_intake
     }
   end
 

@@ -22,4 +22,17 @@ defmodule CuraWeb.Api.MeetingController do
       error -> error
     end
   end
+
+  def intake(conn, %{"id" => id} = params) do
+    user = conn.assigns.current_user
+
+    with {:ok, meeting} <- Meetings.get_meeting!(id),
+         true <- meeting.patient_id == user.id,
+         {:ok, updated} <- Meetings.update_intake(meeting, params) do
+      render(conn, :show, meeting: updated)
+    else
+      false -> {:error, :unauthorized}
+      error -> error
+    end
+  end
 end

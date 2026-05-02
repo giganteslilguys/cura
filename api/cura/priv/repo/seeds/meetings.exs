@@ -78,6 +78,23 @@ defmodule Cura.Repo.Seeds.Meetings do
               patient_id: patient.id
             })
           end)
+
+          Enum.each(1..3, fn days_ago ->
+            date = Date.add(base_date, -days_ago)
+            time = Time.new!(9 + rem(days_ago + doctor_index, 8), Enum.random([0, 30]), 0)
+
+            Repo.insert!(%Meeting{
+              title: "#{Enum.random(@titles)} - Dr. #{doctor.last_name}",
+              date: date,
+              time: time,
+              duration: Enum.random(@durations),
+              notes: Enum.random(@notes),
+              timezone: "UTC",
+              status: :completed,
+              doctor_id: doctor.id,
+              patient_id: Enum.random(patients).id
+            })
+          end)
         end)
 
         Mix.shell().info("Seeded meetings for #{length(doctors)} doctors.")

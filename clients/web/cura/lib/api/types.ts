@@ -44,6 +44,12 @@ export type FieldErrors = Record<string, string[]>;
 
 export type MeetingStatus = "scheduled" | "completed" | "canceled" | "rejected";
 
+export type PatientIntake = {
+  reason: string;
+  symptoms: string | null;
+  notes: string | null;
+};
+
 export type Meeting = {
   id: string;
   title: string;
@@ -55,4 +61,5 @@ export type Meeting = {
   status: MeetingStatus;
   doctor: User | null;
   patient: User | null;
+  patient_intake: PatientIntake | null;
 };

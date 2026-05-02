@@ -7,6 +7,7 @@ defmodule Cura.Meetings.Meeting do
 
   @required_fields ~w(title date time duration doctor_id patient_id)a
   @optional_fields ~w(notes status timezone)a
+  @intake_fields ~w(reason symptoms notes)a
 
   schema "meetings" do
     belongs_to :doctor, User
@@ -22,6 +23,8 @@ defmodule Cura.Meetings.Meeting do
     field :status, Ecto.Enum,
       values: [:scheduled, :completed, :canceled, :rejected],
       default: :scheduled
+
+    field :patient_intake, :map
 
     timestamps()
   end
@@ -95,5 +98,29 @@ defmodule Cura.Meetings.Meeting do
       max: 1000,
       message: "Meeting notes cannot exceed 1000 characters"
     )
+  end
+
+  def intake_changeset(meeting, attrs) do
+    intake = attrs["patient_intake"] || attrs[:patient_intake] || %{}
+
+    validated =
+      {%{}, Enum.map(@intake_fields, &{&1, :string}) |> Map.new()}
+      |> Ecto.Changeset.cast(intake, @intake_fields)
+      |> Ecto.Changeset.validate_required([:reason], message: "Reason for visit is required")
+      |> Ecto.Changeset.validate_length(:reason, max: 500)
+      |> Ecto.Changeset.validate_length(:symptoms, max: 1000)
+      |> Ecto.Changeset.validate_length(:notes, max: 1000)
+
+    if validated.valid? do
+      meeting
+      |> cast(%{patient_intake: Ecto.Changeset.apply_changes(validated)}, [:patient_intake])
+    else
+      Ecto.Changeset.add_error(
+        cast(meeting, %{}, []),
+        :patient_intake,
+        "is invalid",
+        errors: validated.errors
+      )
+    end
   end
 end
