@@ -32,6 +32,7 @@ type Props = {
   meeting: Meeting;
   currentUser: User;
   token: string;
+  forceReport?: boolean;
 };
 
 type ConnState = 'idle' | 'waiting' | 'connecting' | 'connected' | 'failed';
@@ -75,7 +76,7 @@ function getTimeUntilStart(meeting: Meeting): string | null {
   return `${s}s`;
 }
 
-export function MeetingRoom({ meeting, currentUser, token }: Props) {
+export function MeetingRoom({ meeting, currentUser, token, forceReport }: Props) {
   const router = useRouter();
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -463,7 +464,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
     if (!isDoctor) {
       return <OnSiteNotForPatient onBack={endCall} />;
     }
-    const onSitePhase = getOnSitePhase(meeting);
+    const onSitePhase = forceReport ? 'post' : getOnSitePhase(meeting);
     if (onSitePhase === 'post') {
       return <DoctorPostMeetingView meeting={meeting} token={token} onBack={endCall} />;
     }

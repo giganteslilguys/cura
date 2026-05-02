@@ -82,6 +82,16 @@ defmodule Cura.Meetings do
     |> Repo.update()
   end
 
+  def complete_meeting(%Meeting{} = meeting) do
+    meeting
+    |> Ecto.Changeset.change(status: :completed)
+    |> Repo.update()
+    |> case do
+      {:ok, updated} -> {:ok, Repo.preload(updated, [:doctor, patient: :patient_profile])}
+      error -> error
+    end
+  end
+
   def update_meeting(%Meeting{} = meeting, attrs) do
     meeting
     |> Meeting.changeset(attrs)
@@ -248,74 +258,125 @@ defmodule Cura.Meetings do
     with {:ok, meeting} <- get_meeting!(meeting_id) do
       transcript = list_transcript_entries(meeting_id)
 
-      if transcript == [] do
-        {:error, :no_transcript}
-      else
-        transcript_text =
+      transcript_text =
+        if transcript == [] do
+          nil
+        else
           Enum.map_join(transcript, "\n", fn e ->
             "#{String.upcase(to_string(e.speaker))}: #{e.text}"
           end)
-
-        profile = meeting.patient && meeting.patient.patient_profile
-        intake  = meeting.patient_intake
-        patient_ctx = build_patient_context(profile, intake)
-
-        prompt = """
-        You are a clinical documentation assistant. Based on the consultation transcript and patient data below,
-        generate a structured visit note as a JSON object.
-
-        #{patient_ctx}
-
-        TRANSCRIPT:
-        #{transcript_text}
-
-        Respond ONLY with a JSON object matching this exact schema (no prose, no markdown):
-        {
-          "vitals": null,
-          "diagnoses": [{"condition": "string", "icd_code": "string or null", "type": "primary or secondary"}],
-          "clinical_assessment": "string",
-          "treatment_plan": ["string"],
-          "prescriptions": [{"name": "string", "dosage": "string or null", "quantity": "string or null", "refills": "string or null", "instructions": "string or null"}],
-          "lab_orders": ["string"],
-          "follow_up_appointment": "string or null",
-          "when_to_seek_care": ["string"]
-        }
-        """
-
-        body = %{
-          model: "gpt-4o-mini",
-          temperature: 0.2,
-          messages: [
-            %{role: "system", content: "You are a clinical documentation assistant. Output only valid JSON."},
-            %{role: "user", content: prompt}
-          ]
-        }
-
-        headers = [{"Authorization", "Bearer #{api_key}"}, {"Content-Type", "application/json"}]
-
-        case Req.post(@openai_url, json: body, headers: headers, receive_timeout: 30_000) do
-          {:ok, %{status: 200, body: %{"choices" => [%{"message" => %{"content" => content}} | _]}}} ->
-            case Jason.decode(content) do
-              {:ok, note} -> {:ok, note}
-              _           -> {:error, :parse_failed}
-            end
-
-          {:ok, %{status: status}} ->
-            {:error, "OpenAI returned #{status}"}
-
-          {:error, reason} ->
-            {:error, reason}
         end
+
+      profile  = meeting.patient && meeting.patient.patient_profile
+      intake   = meeting.patient_intake
+      docs_ctx = build_documents_context(meeting.patient_id)
+
+      patient_ctx = build_patient_context(profile, intake)
+
+      transcript_section =
+        if transcript_text do
+          "CONSULTATION TRANSCRIPT:\n#{transcript_text}"
+        else
+          "TRANSCRIPT: Not available."
+        end
+
+      prompt = """
+      You are a clinical documentation assistant. Based on the patient data, documents, and consultation below,
+      generate a comprehensive structured visit note as a JSON object.
+
+      #{patient_ctx}
+      #{docs_ctx}
+
+      #{transcript_section}
+
+      Respond ONLY with a JSON object matching this exact schema (no prose, no markdown):
+      {
+        "vitals": null,
+        "diagnoses": [{"condition": "string", "icd_code": "string or null", "type": "primary or secondary"}],
+        "clinical_assessment": "string",
+        "treatment_plan": ["string"],
+        "prescriptions": [{"name": "string", "dosage": "string or null", "quantity": "string or null", "refills": "string or null", "instructions": "string or null"}],
+        "lab_orders": ["string"],
+        "follow_up_appointment": "string or null",
+        "when_to_seek_care": ["string"]
+      }
+      """
+
+      body = %{
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        messages: [
+          %{role: "system", content: "You are a clinical documentation assistant. Output only valid JSON."},
+          %{role: "user", content: prompt}
+        ]
+      }
+
+      headers = [{"Authorization", "Bearer #{api_key}"}, {"Content-Type", "application/json"}]
+
+      require Logger
+
+      case Req.post(@openai_url, json: body, headers: headers, receive_timeout: 60_000) do
+        {:ok, %{status: 200, body: %{"choices" => [%{"message" => %{"content" => content}} | _]}}} ->
+          cleaned = content |> String.replace(~r/^```json\s*/m, "") |> String.replace(~r/```\s*$/m, "") |> String.trim()
+          case Jason.decode(cleaned) do
+            {:ok, note} -> {:ok, note}
+            err ->
+              Logger.error("[SOAP] JSON parse failed: #{inspect(err)}\nContent: #{content}")
+              {:error, :parse_failed}
+          end
+
+        {:ok, %{status: status, body: body}} ->
+          Logger.error("[SOAP] OpenAI returned #{status}: #{inspect(body)}")
+          {:error, :openai_error}
+
+        {:error, reason} ->
+          Logger.error("[SOAP] Request failed: #{inspect(reason)}")
+          {:error, :openai_error}
       end
     end
   end
+
+  defp build_documents_context(nil), do: ""
+  defp build_documents_context(patient_id) do
+    docs = Cura.Documents.list_documents(patient_id)
+    if docs == [], do: "", else: do_build_documents_context(docs)
+  end
+
+  defp do_build_documents_context(docs) do
+    texts =
+      docs
+      |> Enum.map(fn doc ->
+        path = Cura.Documents.full_path(doc)
+        case System.cmd("pdftotext", [path, "-"], stderr_to_stdout: false) do
+          {text, 0} ->
+            trimmed = String.trim(text)
+            if trimmed != "", do: "--- #{doc.filename} ---\n#{trimmed}", else: nil
+          _ -> nil
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    if texts == [] do
+      ""
+    else
+      "\nPATIENT DOCUMENTS:\n" <> Enum.join(texts, "\n\n") <> "\n"
+    end
+  end
+
+  defp medication_name(%{name: n}), do: n
+  defp medication_name(%{"name" => n}), do: n
+  defp medication_name(_), do: "unknown"
+
+  defp allergy_substance(%{substance: s}), do: s
+  defp allergy_substance(%{"substance" => s}), do: s
+  defp allergy_substance(_), do: "unknown"
 
   defp build_patient_context(nil, nil), do: ""
   defp build_patient_context(profile, intake) do
     lines =
       (if profile do
-        meds      = Enum.map_join(profile.medications || [], ", ", & &1["name"])
-        allergies = Enum.map_join(profile.allergies || [], ", ", & &1["substance"])
+        meds      = Enum.map_join(profile.medications || [], ", ", &medication_name/1)
+        allergies = Enum.map_join(profile.allergies || [], ", ", &allergy_substance/1)
         conditions = Enum.join(profile.conditions || [], ", ")
         ["PATIENT DATA:",
          "- Medications: #{if meds == "", do: "none", else: meds}",

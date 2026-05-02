@@ -8,13 +8,17 @@ import { getSessionToken } from "@/lib/auth/session";
 import { MeetingRoom } from "./meeting-room";
 
 type Params = { id: string };
+type SearchParams = { report?: string };
 
 export default async function MeetingPage({
   params,
+  searchParams,
 }: {
   params: Promise<Params>;
+  searchParams: Promise<SearchParams>;
 }) {
   const { id } = await params;
+  const { report } = await searchParams;
 
   const user = await getCurrentUser();
   if (!user) redirect("/sign-in");
@@ -37,6 +41,7 @@ export default async function MeetingPage({
       meeting={meeting}
       currentUser={user}
       token={token}
+      forceReport={report === '1'}
     />
   );
 }

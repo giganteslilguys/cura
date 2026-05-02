@@ -66,12 +66,18 @@ export default async function PatientPage({
             <h1 className="text-2xl font-semibold text-black">{fullName}</h1>
             <p className="text-sm text-black/40 mt-1">{meeting.title}</p>
           </div>
-          <Link
-            href={`/meetings/${id}`}
-            className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity shrink-0"
-          >
-            Join visit <ArrowRight className="w-4 h-4" />
-          </Link>
+          {meeting.status === 'scheduled' && (() => {
+            const start = new Date(`${meeting.date}T${meeting.time}`).getTime();
+            const upcoming = meeting.kind === 'on_site' || start > Date.now();
+            return upcoming ? (
+              <Link
+                href={`/meetings/${id}`}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity shrink-0"
+              >
+                Join visit <ArrowRight className="w-4 h-4" />
+              </Link>
+            ) : null;
+          })()}
         </div>
 
         <div className="flex flex-col gap-6">

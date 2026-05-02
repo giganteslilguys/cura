@@ -62,6 +62,16 @@ defmodule CuraWeb.Api.MeetingController do
     end
   end
 
+  def complete(conn, %{"id" => id}) do
+    user = conn.assigns.current_user
+
+    with {:ok, meeting} <- Meetings.get_meeting!(id),
+         :ok <- authorize_doctor(meeting, user.id),
+         {:ok, updated} <- Meetings.complete_meeting(meeting) do
+      render(conn, :show, meeting: updated)
+    end
+  end
+
   def on_site(conn, params) do
     user = conn.assigns.current_user
 
@@ -88,10 +98,10 @@ defmodule CuraWeb.Api.MeetingController do
          {:ok, note} <- Meetings.generate_soap_note(id) do
       json(conn, %{soap_note: note})
     else
-      {:error, :no_transcript} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "No transcript available yet."})
       {:error, :parse_failed} ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: "Could not parse AI response."})
+      {:error, :openai_error} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "AI service unavailable. Please try again."})
       other -> other
     end
   end

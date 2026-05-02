@@ -29,6 +29,7 @@ defmodule CuraWeb.Router do
     get "/me", AuthController, :me
 
     post "/meetings/on_site", MeetingController, :on_site
+    patch "/meetings/:id/complete", MeetingController, :complete
     get "/meetings", MeetingController, :index
     get "/meetings/:id", MeetingController, :show
     get "/meetings/:id/transcript", MeetingController, :transcript

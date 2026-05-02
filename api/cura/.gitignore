@@ -49,3 +49,4 @@ shell.nix
 # Audio Files
 *.mp3
 *.m4a
+priv/uploads/*

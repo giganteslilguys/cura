@@ -79,7 +79,15 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
       </div>
 
       <div className="shrink-0">
-        {user.role === 'patient' && hasReport ? (
+        {user.role === 'patient' && upcoming && (
+          <Link
+            href={`/meetings/${m.id}`}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Join <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        )}
+        {user.role === 'patient' && !upcoming && !canceled && (
           <Link
             href={`/meetings/${m.id}/summary`}
             className="flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-medium transition-opacity hover:opacity-80"
@@ -88,14 +96,25 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
             <FileText className="w-3.5 h-3.5" />
             View summary
           </Link>
-        ) : upcoming ? (
+        )}
+        {user.role === 'doctor' && upcoming && (
           <Link
             href={`/meetings/${m.id}`}
             className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity"
           >
             Join <ArrowRight className="w-3.5 h-3.5" />
           </Link>
-        ) : null}
+        )}
+        {user.role === 'doctor' && !upcoming && !canceled && !hasReport && (
+          <Link
+            href={`/meetings/${m.id}${m.kind === 'on_site' ? '?report=1' : ''}`}
+            className="flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-medium transition-opacity hover:opacity-80"
+            style={{ background: 'rgba(181,71,27,0.08)', color: '#b5471b', border: '1px solid rgba(181,71,27,0.18)' }}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Submit report
+          </Link>
+        )}
       </div>
     </div>
   );
