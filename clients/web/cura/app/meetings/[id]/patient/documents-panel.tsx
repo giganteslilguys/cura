@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Upload, Trash2, Download, FileText, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Upload, Trash2, Download, Eye, FileText, Loader2 } from 'lucide-react';
 import {
   deleteDocument,
   downloadDocument,
@@ -9,6 +9,8 @@ import {
   uploadDocument,
   type PatientDocument,
 } from '@/lib/api/documents';
+
+import { DocumentViewer } from './document-viewer';
 
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -36,6 +38,20 @@ export function DocumentsPanel({
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Document being previewed in the modal, plus its bearer-fetched blob URL.
+  // We mint the URL once per open and revoke it on close so memory stays clean.
+  const [viewing, setViewing] = useState<PatientDocument | null>(null);
+  const [viewBlobUrl, setViewBlobUrl] = useState<string | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
+
+  // Always revoke the blob URL when it changes or the panel unmounts.
+  useEffect(() => {
+    return () => {
+      if (viewBlobUrl) URL.revokeObjectURL(viewBlobUrl);
+    };
+  }, [viewBlobUrl]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -80,6 +96,37 @@ export function DocumentsPanel({
       setError('Could not delete document.');
     }
   };
+
+  const handleView = async (doc: PatientDocument) => {
+    setViewing(doc);
+    setViewLoading(true);
+    setViewError(null);
+    setViewBlobUrl(null);
+
+    try {
+      const { blob } = await downloadDocument(doc.id, token);
+      setViewBlobUrl(URL.createObjectURL(blob));
+    } catch {
+      setViewError('Não foi possível carregar a pré-visualização.');
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const closeView = () => {
+    setViewing(null);
+    setViewError(null);
+    if (viewBlobUrl) {
+      URL.revokeObjectURL(viewBlobUrl);
+      setViewBlobUrl(null);
+    }
+  };
+
+  // Only formats browsers can render natively in an iframe get the Eye button.
+  const isPreviewable = (doc: PatientDocument) =>
+    doc.content_type === 'application/pdf' ||
+    doc.content_type.startsWith('image/') ||
+    doc.content_type === 'text/plain';
 
   return (
     <div className="flex flex-col gap-4">
@@ -137,11 +184,22 @@ export function DocumentsPanel({
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                {isPreviewable(doc) && (
+                  <button
+                    onClick={() => handleView(doc)}
+                    className="p-1.5 text-black/30 hover:text-[#b5471b] transition-colors"
+                    aria-label="Ver"
+                    title="Ver"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   onClick={() => handleDownload(doc)}
                   disabled={downloading === doc.id}
                   className="p-1.5 text-black/30 hover:text-[#b5471b] transition-colors disabled:opacity-40"
-                  aria-label="Download"
+                  aria-label="Transferir"
+                  title="Transferir"
                 >
                   {downloading === doc.id ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -152,7 +210,8 @@ export function DocumentsPanel({
                 <button
                   onClick={() => handleDelete(doc.id)}
                   className="p-1.5 text-black/30 hover:text-[#b5471b] transition-colors"
-                  aria-label="Delete"
+                  aria-label="Eliminar"
+                  title="Eliminar"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -160,6 +219,18 @@ export function DocumentsPanel({
             </li>
           ))}
         </ul>
+      )}
+
+      {viewing && (
+        <DocumentViewer
+          doc={viewing}
+          blobUrl={viewBlobUrl}
+          loading={viewLoading}
+          error={viewError}
+          onClose={closeView}
+          onDownload={() => handleDownload(viewing)}
+          downloading={downloading === viewing.id}
+        />
       )}
     </div>
   );

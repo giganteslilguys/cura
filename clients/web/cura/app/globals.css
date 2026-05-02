@@ -9,3 +9,15 @@ body {
   color: #000000;
   font-family: var(--font-plus-jakarta-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Modal entrance animations — no JS, no plugin. */
+@keyframes cura-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cura-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.cura-fade-in  { animation: cura-fade-in  150ms ease-out both; }
+.cura-scale-in { animation: cura-scale-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
