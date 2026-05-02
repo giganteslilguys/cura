@@ -1079,8 +1079,8 @@ function DoctorPostMeetingView({
 
         {/* Center: Visit Summary form */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <div className="flex-1 bg-white rounded-xl border border-stone-200 flex flex-col overflow-hidden">
-            <div className="px-6 pt-5 pb-4 border-b border-stone-100 shrink-0">
+          <div className={`flex-1 bg-white rounded-xl border border-stone-200 flex flex-col overflow-hidden ${generating ? 'cura-ai-pending' : ''}`}>
+            <div className="px-6 pt-5 pb-4 border-b border-stone-100 shrink-0 relative">
               <div className="flex items-center gap-2">
                 <StethoscopeIcon className="w-4 h-4 text-orange-500 shrink-0" />
                 <h2 className="font-semibold text-stone-900">Summary</h2>
@@ -1088,9 +1088,17 @@ function DoctorPostMeetingView({
               {submitted && (
                 <p className="text-xs text-stone-400 mt-1 ml-6">This summary has been submitted and is read-only.</p>
               )}
+              {generating && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-100 cura-ai-shimmer">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-600 cura-ai-pulse shrink-0" />
+                  <p className="text-xs font-medium text-orange-900">
+                    Drafting visit summary from the transcript and patient context…
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+            <div className={`flex-1 overflow-y-auto px-6 py-5 space-y-6 transition-opacity duration-300 ${generating ? 'opacity-60' : 'opacity-100'}`}>
               {/* Vitals */}
               <FormSection icon={<HeartPulseIcon className="w-4 h-4" />} title="Vitals">
                 <div className="grid grid-cols-2 gap-3">
@@ -1311,9 +1319,9 @@ function DoctorPostMeetingView({
                   <button
                     onClick={handleGenerate}
                     disabled={generating || saving}
-                    className="flex items-center gap-1.5 px-5 py-2.5 border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-40 disabled:cursor-not-allowed rounded-full text-sm font-medium transition-colors"
+                    className={`flex items-center gap-1.5 px-5 py-2.5 border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:cursor-not-allowed rounded-full text-sm font-medium transition-colors ${generating ? 'cura-ai-shimmer disabled:opacity-100' : 'disabled:opacity-40'}`}
                   >
-                    <Sparkles className="w-3.5 h-3.5" />
+                    <Sparkles className={`w-3.5 h-3.5 ${generating ? 'cura-ai-pulse' : ''}`} />
                     {generating ? "Generating…" : "Generate draft"}
                   </button>
                   <button

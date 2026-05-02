@@ -21,3 +21,78 @@ body {
 }
 .cura-fade-in  { animation: cura-fade-in  150ms ease-out both; }
 .cura-scale-in { animation: cura-scale-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* ── AI working effect ────────────────────────────────────────────────────
+   `cura-ai-pending` paints an animated conic-gradient border around the
+   element while AI is generating. The gradient angle is animated via a
+   custom property so we don't rotate the DOM node — keeps layout stable
+   and avoids clipping in `overflow-hidden` containers.
+*/
+
+@property --cura-ai-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes cura-ai-spin {
+  to { --cura-ai-angle: 360deg; }
+}
+
+@keyframes cura-ai-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
+
+@keyframes cura-ai-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.cura-ai-pending {
+  position: relative;
+}
+
+/* Rainbow lives only on the border ring of the element marked
+   `cura-ai-pending`. Everything else (banner, button, sparkle) stays in
+   the brand palette so the iridescent effect doesn't compete with itself. */
+
+.cura-ai-pending::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--cura-ai-angle),
+    #f472b6  0deg,    /* pink-400      */
+    #a855f7  60deg,   /* purple-500    */
+    #6366f1  120deg,  /* indigo-500    */
+    #06b6d4  180deg,  /* cyan-500      */
+    #f59e0b  240deg,  /* amber-500     */
+    #b5471b  300deg,  /* cura orange   */
+    #f472b6  360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  animation: cura-ai-spin 2.6s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.cura-ai-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent  0%,
+    rgba(181, 71, 27, 0.08) 35%,
+    rgba(245, 158, 11, 0.18) 50%,
+    rgba(181, 71, 27, 0.08) 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: cura-ai-shimmer 1.6s ease-in-out infinite;
+}
+
+.cura-ai-pulse { animation: cura-ai-pulse 1.4s ease-in-out infinite; }
