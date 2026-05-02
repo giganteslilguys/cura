@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, RefObject } from "react";
+import { Camera, CameraOff, DoorOpen, Mic, MicOff, PhoneOff, Sparkles, Video, VideoOff } from "lucide-react";
 import { Channel, Socket } from "phoenix";
+import type { Meeting, User } from "@/lib/api/types";
+import { RefObject, useEffect, useRef, useState } from "react";
 
 import { PUBLIC_SOCKET_URL } from "@/lib/api/config";
 import { submitMeetingIntake } from "@/lib/api/meetings";
-import type { Meeting, PatientIntake, User } from "@/lib/api/types";
+import { useRouter } from "next/navigation";
 
 const PC_CONFIG: RTCConfiguration = {
   iceServers: [
@@ -112,10 +113,6 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
     let didCall = false;
     let pendingCandidates: RTCIceCandidateInit[] = [];
 
-    // Creates a fresh RTCPeerConnection wired to the local stream and the
-    // shared refs/callbacks. Called once at startup and again whenever the
-    // remote peer leaves so the next offer arrives into a clean PC with no
-    // stale ICE credentials.
     const makePc = (stream: MediaStream) => {
       pcRef.current?.close();
       const pc = new RTCPeerConnection(PC_CONFIG);
@@ -150,9 +147,6 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         }
       };
 
-      // When restartIce() is called it fires negotiationneeded. The caller
-      // must create a new offer with the ICE restart flag so the remote peer
-      // learns the new ufrag; otherwise every incoming candidate is rejected.
       pc.onnegotiationneeded = async () => {
         if (!isCaller || !peerPresent || cancelled) return;
         try {
@@ -203,7 +197,6 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
     const start = async () => {
       setConnState("waiting");
 
-      // 1. local media
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -227,10 +220,8 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       localStreamRef.current = stream;
       if (localVideoRef.current) localVideoRef.current.srcObject = stream;
 
-      // 2. initial peer connection
       makePc(stream);
 
-      // 3. signaling channel
       const socket = new Socket(`${PUBLIC_SOCKET_URL}/socket`, {
         params: { token },
       });
@@ -240,7 +231,6 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       const channel = socket.channel(`room:${meeting.id}`);
       channelRef.current = channel;
 
-      // Conversation channel — audio transcription
       const convChannel = socket.channel(`conversation:${meeting.id}`);
       conversationChannelRef.current = convChannel;
 
@@ -470,26 +460,12 @@ function DoctorMeetingRoom({
   onEndCall: () => void;
 }) {
   const [doneSuggestions, setDoneSuggestions] = useState<Set<number>>(new Set());
-  const [viewMode, setViewMode] = useState<"doctor" | "patient">("doctor");
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (connState !== "connected") return;
-    const timer = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
-    return () => clearInterval(timer);
-  }, [connState]);
 
   useEffect(() => {
     const el = transcriptScrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [transcript]);
-
-  const formatRecording = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, "0");
-    const s = (secs % 60).toString().padStart(2, "0");
-    return `${m}:${s}`;
-  };
 
   const toggleSuggestion = (id: number) => {
     setDoneSuggestions((prev) => {
@@ -504,48 +480,34 @@ function DoctorMeetingRoom({
     ? `${patient.first_name} ${patient.last_name}`
     : "Patient";
 
-  const isPatientMain = viewMode === "patient";
-
   return (
-    <div className="flex flex-col h-screen bg-stone-100 text-stone-900">
-      {/* Header */}
-      <header className="flex items-center gap-4 px-6 py-3 bg-white border-b border-stone-200 shrink-0">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shrink-0">
-            <PersonIcon className="w-5 h-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-semibold text-stone-900 truncate">{patientName}</p>
-            <p className="text-xs text-stone-400 truncate">{meeting.title}</p>
-          </div>
-          <button className="flex items-center gap-0.5 text-orange-600 text-sm font-medium shrink-0 ml-2 hover:text-orange-700 transition-colors">
-            Full chart
-            <ChevronRightIcon className="w-4 h-4" />
-          </button>
+    <div className="flex flex-col h-screen text-black" style={{ background: '#ffffff' }}>
+      {/* Top — no bar, just text with breathing room */}
+      <div className="flex items-center justify-between px-8 pt-7 pb-0 shrink-0">
+        <div>
+          <p className="font-semibold text-black">{patientName}</p>
+          <p className="text-xs text-black/40 mt-0.5">{meeting.title}</p>
         </div>
-        <div className="flex items-center gap-4 shrink-0">
-          <span className="text-xs text-stone-400">HIPAA-compliant • Encrypted</span>
+        <div className="flex items-center gap-6">
+          <span className="text-xs text-black/20">HIPAA-compliant · Encrypted</span>
           <button
             onClick={onEndCall}
-            className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors"
+            className="px-5 py-2.5 rounded-full bg-[#811824] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
           >
-            End visit
+            <DoorOpen className="w-4 h-4" /> End visit
           </button>
         </div>
-      </header>
+      </div>
 
       {/* Main */}
-      <div className="flex flex-1 gap-4 p-4 overflow-hidden">
+      <div className="flex flex-1 gap-5 p-6 overflow-hidden">
         {/* Left: Video + Transcript */}
-        <div className="flex flex-col flex-1 gap-3 min-w-0 overflow-hidden">
-          {/* Video area */}
-          <div className="relative flex-1 rounded-xl overflow-hidden bg-[#2a1200] min-h-0">
-
-            {/* Remote video (patient when in doctor view, self when in patient-perspective view) */}
+        <div className="flex flex-col gap-4 self-stretch overflow-hidden" style={{ flex: '0 0 auto' }}>
+          {/* Video: 2/5 of viewport height, 16:9 aspect ratio */}
+          <div className="relative rounded-2xl overflow-hidden bg-black shrink-0" style={{ height: '55vh', aspectRatio: '16/9' }}>
             <video
-              ref={isPatientMain ? localVideoRef : remoteVideoRef}
+              ref={remoteVideoRef}
               autoPlay
-              muted={isPatientMain}
               playsInline
               className="w-full h-full object-cover"
             />
@@ -560,77 +522,75 @@ function DoctorMeetingRoom({
               </div>
             )}
 
-            {/* Controls */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 z-10">
-              <button
-                onClick={onToggleMute}
-                aria-label={muted ? "Unmute" : "Mute"}
-                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
-                  muted
-                    ? "bg-orange-600 text-white"
-                    : "bg-white/20 hover:bg-white/30 text-white"
-                }`}
-              >
-                {muted ? (
-                  <MicOffIcon className="w-5 h-5" />
-                ) : (
-                  <MicIcon className="w-5 h-5" />
-                )}
-              </button>
-              <button
-                onClick={onToggleVideo}
-                aria-label={videoOff ? "Turn camera on" : "Turn camera off"}
-                className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
-                  videoOff
-                    ? "bg-orange-600 text-white"
-                    : "bg-white/20 hover:bg-white/30 text-white"
-                }`}
-              >
-                {videoOff ? (
-                  <CameraOffIcon className="w-5 h-5" />
-                ) : (
-                  <CameraIcon className="w-5 h-5" />
-                )}
-              </button>
+            {/* Controls glass capsule */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+              <div className="flex items-center gap-2 bg-black/30 backdrop-blur-xl rounded-full px-4 py-2.5 border border-white/10">
+                <button
+                  onClick={onToggleMute}
+                  aria-label={muted ? "Unmute" : "Mute"}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                    muted
+                      ? "bg-[#811824] text-white"
+                      : "bg-white/10 hover:bg-white/20 text-white"
+                  }`}
+                >
+                  {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={onToggleVideo}
+                  aria-label={videoOff ? "Turn camera on" : "Turn camera off"}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                    videoOff
+                      ? "bg-[#811824] text-white"
+                      : "bg-white/10 hover:bg-white/20 text-white"
+                  }`}
+                >
+                  {videoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
-            {/* Doctor PiP (self view in bottom-right) */}
-            <div className="absolute bottom-3 right-3 w-28 h-20 rounded-xl overflow-hidden bg-stone-800 border border-stone-600/50 z-10">
+            {/* Self-view PiP */}
+            <div className="absolute bottom-3 right-3 w-28 h-20 rounded-xl overflow-hidden bg-black border border-white/10 z-10">
               <video
-                ref={isPatientMain ? remoteVideoRef : localVideoRef}
+                ref={localVideoRef}
                 autoPlay
-                muted={!isPatientMain}
+                muted
                 playsInline
-                className={`w-full h-full object-cover${!isPatientMain ? " scale-x-[-1]" : ""}`}
+                className="w-full h-full object-cover scale-x-[-1]"
               />
-              {!isPatientMain && videoOff && (
-                <div className="absolute inset-0 flex items-center justify-center bg-stone-800">
-                  <CameraOffIcon className="w-5 h-5 text-stone-400" />
+              {videoOff && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                  <VideoOff className="w-4 h-4 text-white/30" />
                 </div>
               )}
             </div>
           </div>
 
-          {/* Transcript */}
+          {/* Transcript — no card, just a separated section */}
           <div
             ref={transcriptScrollRef}
-            className="bg-white rounded-xl border border-stone-200 px-4 pt-3 pb-4 shrink-0 max-h-48 overflow-y-auto"
+            className="flex-1 min-h-0 border-t border-black/[0.06] pt-4 pb-2 overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold tracking-widest text-stone-500 uppercase">
+              <span className="text-xs font-medium text-black/35 uppercase tracking-widest">
                 Live Transcript
               </span>
-              <span className="text-xs text-stone-400">
-                {transcript.length === 0 ? "Waiting…" : `${transcript.length} segment${transcript.length === 1 ? "" : "s"}`}
+              <span className="text-xs text-black/20">
+                {transcript.length === 0
+                  ? "Waiting…"
+                  : `${transcript.length} segment${transcript.length === 1 ? "" : "s"}`}
               </span>
             </div>
             <div className="space-y-1.5">
               {transcript.length === 0 ? (
-                <p className="text-xs text-stone-400 italic">Transcription will appear here once the conversation starts.</p>
+                <p className="text-xs text-black/25 italic">
+                  Transcription will appear here once the conversation starts.
+                </p>
               ) : (
                 transcript.slice(-8).map((entry, i) => (
                   <div key={i} className="flex gap-3 text-xs">
-                    <span className="text-stone-400 font-mono w-10 shrink-0 pt-px">
+                    <span className="text-black/25 font-mono w-10 shrink-0 pt-px">
                       {entry.time}
                     </span>
                     <span className={`w-14 shrink-0 font-semibold pt-px ${entry.speaker === "doctor" ? "text-orange-500" : "text-blue-500"}`}>
@@ -716,16 +676,36 @@ function DoctorMeetingRoom({
                 </div>
               ))}
             </div>
+            <p className="text-xs text-black/30 ml-5">Real-time guidance</p>
           </div>
 
-          <button className="w-full py-3 px-4 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors text-left shrink-0">
-            View draft SOAP note (73% complete)
+          <div className="flex flex-col gap-5">
+            {MOCK_SUGGESTIONS.map((suggestion) => (
+              <div
+                key={suggestion.id}
+                className={`transition-opacity ${
+                  doneSuggestions.has(suggestion.id) ? "opacity-20" : ""
+                }`}
+              >
+                <p className="text-sm text-black leading-relaxed">{suggestion.text}</p>
+                <button
+                  onClick={() => toggleSuggestion(suggestion.id)}
+                  className="mt-1.5 text-xs text-black/30 hover:text-black transition-colors"
+                >
+                  {doneSuggestions.has(suggestion.id) ? "Undo" : "Mark done"}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button className="text-sm text-[#811824] font-medium text-left hover:opacity-70 transition-opacity mt-auto">
+            View draft SOAP note →
           </button>
         </aside>
       </div>
 
       {error && (
-        <div className="px-6 py-3 bg-red-900/40 border-t border-red-800 text-sm text-red-200">
+        <div className="px-8 py-3 text-sm text-[#811824] border-t border-[#811824]/15">
           {error}
         </div>
       )}
@@ -757,7 +737,6 @@ function PatientMeetingRoom({
   onEndCall: () => void;
 }) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [viewMode, setViewMode] = useState<"doctor" | "patient">("patient");
 
   useEffect(() => {
     if (connState !== "connected") return;
@@ -778,8 +757,8 @@ function PatientMeetingRoom({
   const isConnected = connState === "connected";
 
   return (
-    <div className="relative flex flex-col h-screen bg-[#2a1200] text-white overflow-hidden">
-      {/* Remote (doctor) video fills the screen */}
+    <div className="relative flex flex-col h-screen bg-black text-white overflow-hidden">
+      {/* Doctor video fills the screen */}
       <video
         ref={remoteVideoRef}
         autoPlay
@@ -787,36 +766,40 @@ function PatientMeetingRoom({
         className="absolute inset-0 w-full h-full object-cover"
       />
 
+      {/* Doctor placeholder when not connected */}
+      {!isConnected && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+            <Camera className="w-7 h-7 text-white/30" />
+          </div>
+          <span className="text-white/40 text-sm">{doctorName}</span>
+        </div>
+      )}
 
-      {/* Top bar */}
-      <div className="relative z-10 flex items-center justify-between px-5 py-4">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-white text-sm">Cura</span>
-          <span
-            className={`w-2 h-2 rounded-full ${
-              isConnected ? "bg-green-400" : "bg-stone-400"
-            }`}
-          />
-          <span className="text-white/70 text-xs">
-            {isConnected ? `Connected with ${doctorName}` : "Waiting for doctor…"}
+      {/* Top status overlay — glass capsule floating */}
+      <div className="relative z-10 flex justify-center pt-5">
+        <div className="flex items-center gap-3 bg-black/25 backdrop-blur-xl rounded-full px-5 py-2.5 border border-white/10">
+          <span className="font-semibold text-white text-sm">cura</span>
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? "bg-white/70" : "bg-white/20"}`} />
+          <span className="text-white/50 text-xs">
+            {isConnected
+              ? `Connected · ${formatElapsed(elapsedSeconds)}`
+              : connState === "waiting"
+              ? `Waiting for ${doctorName}…`
+              : "Connecting…"}
           </span>
         </div>
-        {isConnected && (
-          <span className="text-white/60 text-xs tabular-nums">
-            {formatElapsed(elapsedSeconds)} elapsed
-          </span>
-        )}
       </div>
 
       {/* Transcription notice */}
-      <div className="relative z-10 flex justify-center px-8 mt-2">
-        <p className="text-white/50 text-xs italic text-center">
-          This conversation is being securely transcribed to help your doctor focus on you.
+      <div className="relative z-10 flex justify-center mt-3">
+        <p className="text-white/25 text-xs italic">
+          This visit is being securely transcribed.
         </p>
       </div>
 
       {/* Self-view PiP */}
-      <div className="absolute bottom-24 right-4 z-10 w-28 h-20 rounded-xl overflow-hidden bg-stone-800 border border-stone-600/50">
+      <div className="absolute bottom-28 right-5 z-10 w-28 h-20 rounded-2xl overflow-hidden border border-white/10">
         <video
           ref={localVideoRef}
           autoPlay
@@ -825,46 +808,44 @@ function PatientMeetingRoom({
           className="w-full h-full object-cover scale-x-[-1]"
         />
         {videoOff && (
-          <div className="absolute inset-0 flex items-center justify-center bg-stone-800">
-            <CameraOffIcon className="w-5 h-5 text-stone-400" />
-          </div>
-        )}
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+                      <CameraOff className="w-4 h-4 text-white/30" />
+                    </div>        )}
       </div>
 
-      {/* Controls + view toggle */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2">
-        <div className="flex items-center gap-3 bg-black/50 backdrop-blur-sm rounded-full px-4 py-3">
+      {/* Controls glass capsule at bottom */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
+        <div className="flex items-center gap-3 bg-black/25 backdrop-blur-xl rounded-full px-5 py-3 border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.4)]">
           <button
             onClick={onToggleMute}
             aria-label={muted ? "Unmute" : "Mute"}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-              muted ? "bg-orange-600 text-white" : "bg-white/20 hover:bg-white/30 text-white"
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+              muted ? "bg-[#811824] text-white" : "bg-white/10 hover:bg-white/20 text-white"
             }`}
           >
-            {muted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
+            {muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
           <button
             onClick={onToggleVideo}
             aria-label={videoOff ? "Turn camera on" : "Turn camera off"}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-              videoOff ? "bg-orange-600 text-white" : "bg-white/20 hover:bg-white/30 text-white"
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+              videoOff ? "bg-[#811824] text-white" : "bg-white/10 hover:bg-white/20 text-white"
             }`}
           >
-            {videoOff ? <CameraOffIcon className="w-5 h-5" /> : <CameraIcon className="w-5 h-5" />}
+            {videoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
           </button>
-
           <button
             onClick={onEndCall}
             aria-label="Leave"
-            className="w-10 h-10 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center text-white transition-colors"
+            className="w-11 h-11 rounded-full bg-[#811824] hover:opacity-90 flex items-center justify-center text-white transition-opacity"
           >
-            <PhoneOffIcon className="w-5 h-5" />
+            <PhoneOff className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 px-6 py-3 bg-red-900/80 text-sm text-red-200">
+        <div className="absolute bottom-0 left-0 right-0 z-20 px-6 py-3 bg-black/60 backdrop-blur-sm text-sm text-white/60">
           {error}
         </div>
       )}

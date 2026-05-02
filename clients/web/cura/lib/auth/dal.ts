@@ -6,7 +6,7 @@ import * as authApi from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/errors";
 import type { User } from "@/lib/api/types";
 
-import { clearSession, getSessionToken } from "./session";
+import { getSessionToken } from "./session";
 
 /**
  * Returns the authenticated user, or `null` if there is no valid session.
@@ -22,9 +22,6 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     return user;
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
-      // Token is invalid/expired — drop the cookie so subsequent reads are
-      // fast and the user is treated as logged out.
-      await clearSession();
       return null;
     }
     throw error;

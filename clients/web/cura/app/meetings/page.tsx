@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Calendar, Clock, Timer, ArrowRight } from "lucide-react";
 
 import { listMeetings } from "@/lib/api/meetings";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { getSessionToken } from "@/lib/auth/session";
+import { Nav } from "@/components/nav";
 
 export default async function MeetingsPage() {
   const user = await getCurrentUser();
@@ -15,37 +17,42 @@ export default async function MeetingsPage() {
   const { meetings } = await listMeetings(token);
 
   return (
-    <main className="flex flex-1 flex-col w-full max-w-3xl mx-auto p-8 gap-6">
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Meetings</h1>
-        <span className="text-sm text-zinc-500">{user.email}</span>
-      </header>
+    <div className="min-h-screen" style={{ background: '#ffffff' }}>
+      <Nav user={user} token={token} />
 
-      {meetings.length === 0 ? (
-        <p className="text-zinc-500">No meetings yet.</p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {meetings.map((m) => (
-            <li
-              key={m.id}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between"
-            >
-              <div className="flex flex-col">
-                <span className="font-medium">{m.title}</span>
-                <span className="text-sm text-zinc-500">
-                  {m.date} · {m.time} · {m.duration} min
-                </span>
-              </div>
-              <Link
-                href={`/meetings/${m.id}`}
-                className="px-4 py-2 rounded-md bg-foreground text-background text-sm font-medium"
+      <main className="max-w-xl mx-auto px-6 pt-28 pb-20">
+        <h1 className="text-2xl font-semibold text-black mb-8">Upcoming visits</h1>
+
+        {meetings.length === 0 ? (
+          <p className="text-sm text-black/40">No visits scheduled.</p>
+        ) : (
+          <div className="flex flex-col">
+            {meetings.map((m, i) => (
+              <div
+                key={m.id}
+                className={`flex items-center justify-between py-5 ${
+                  i < meetings.length - 1 ? "border-b border-black/[0.06]" : ""
+                }`}
               >
-                Join
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium text-black">{m.title}</span>
+                  <span className="text-sm text-black/40 flex items-center gap-2.5">
+                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{m.date}</span>
+                    <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{m.time}</span>
+                    <span className="flex items-center gap-1"><Timer className="w-3.5 h-3.5" />{m.duration} min</span>
+                  </span>
+                </div>
+                <Link
+                  href={`/meetings/${m.id}`}
+                  className="px-5 py-2 rounded-full bg-[#811824] text-white text-sm font-medium hover:opacity-90 transition-opacity shrink-0 flex items-center gap-1.5"
+                >
+                  Join <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
