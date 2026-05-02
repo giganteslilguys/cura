@@ -31,11 +31,10 @@ defmodule Cura.Meetings.Meeting do
     field :soap_note_submitted, :boolean, default: false
 
     field :reminder_24h_sent, :boolean, default: false
-    field :reminder_1h_sent,  :boolean, default: false
+    field :reminder_1h_sent, :boolean, default: false
 
     timestamps()
   end
-
 
   def changeset(meeting, attrs) do
     meeting
@@ -120,7 +119,10 @@ defmodule Cura.Meetings.Meeting do
     submit = attrs["submit"] == true || attrs[:submit] == true
 
     update_attrs = %{soap_note: note}
-    final_attrs = if submit, do: Map.put(update_attrs, :soap_note_submitted, true), else: update_attrs
+
+    final_attrs =
+      if submit, do: Map.put(update_attrs, :soap_note_submitted, true), else: update_attrs
+
     cast(meeting, final_attrs, [:soap_note, :soap_note_submitted])
   end
 

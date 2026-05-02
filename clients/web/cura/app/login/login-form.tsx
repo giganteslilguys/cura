@@ -35,7 +35,7 @@ export function LoginForm() {
 
       <label className="flex flex-col gap-2.5">
         <span className="text-xs font-medium text-black/35 uppercase tracking-widest flex items-center gap-1.5">
-          <Lock className="w-3.5 h-3.5" /> Password
+          <Lock className="w-3.5 h-3.5" /> Palavra-passe
         </span>
         <input
           name="password"
@@ -57,7 +57,7 @@ export function LoginForm() {
         className="mt-2 w-full rounded-full py-3.5 text-sm font-medium text-white flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40"
         style={{ background: '#b5471b' }}
       >
-        {pending ? 'Signing in…' : 'Continue'}
+        {pending ? 'A entrar…' : 'Continuar'}
         {!pending && <ArrowRight className="w-4 h-4" />}
       </button>
     </form>

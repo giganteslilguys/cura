@@ -61,6 +61,7 @@ defmodule CuraWeb.ConversationChannel do
         Logger.error(
           "[ConversationChannel] room=#{room_id} transcription failed=#{inspect(reason)}"
         )
+
         {:noreply, socket}
     end
   end

@@ -7,6 +7,7 @@ defmodule Cura.Conversation.Semaphore do
 
   def run(fun) do
     :ok = acquire()
+
     try do
       fun.()
     after
@@ -35,6 +36,7 @@ defmodule Cura.Conversation.Semaphore do
       {{:value, from}, rest} ->
         GenServer.reply(from, :ok)
         {:noreply, %{state | queue: rest}}
+
       {:empty, _} ->
         {:noreply, %{state | available: n + 1}}
     end

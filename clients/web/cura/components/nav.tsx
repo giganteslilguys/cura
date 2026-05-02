@@ -54,7 +54,7 @@ export function Nav({
             className="flex items-center gap-2 text-sm text-black/40 transition-colors duration-200 hover:text-[#b5471b] hover:scale-102"
           >
             <LogOut className="w-4 h-4" />
-            Logout
+            Sair
           </button>
         ) : (
           right

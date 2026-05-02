@@ -38,7 +38,8 @@ defmodule CuraWeb.Api.DocumentController do
     user = conn.assigns.current_user
 
     with {:ok, doc} <- Documents.get_document(id),
-         true <- doc.patient_id == user.id or doc.uploaded_by_id == user.id or user.role == :doctor do
+         true <-
+           doc.patient_id == user.id or doc.uploaded_by_id == user.id or user.role == :doctor do
       {:ok, _} = Documents.delete_document(doc)
       send_resp(conn, :no_content, "")
     else

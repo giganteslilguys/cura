@@ -35,7 +35,7 @@ export function NotesEditor({
       <textarea
         value={notes}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="Add notes about this patient or visit…"
+        placeholder="Adicione notas sobre este doente ou consulta…"
         maxLength={1000}
         rows={5}
         className="w-full resize-none text-sm text-black/80 leading-relaxed bg-transparent placeholder:text-black/20 focus:outline-none"
@@ -43,10 +43,10 @@ export function NotesEditor({
       <div className="flex justify-between items-center">
         <span className="text-xs text-black/20">{notes.length}/1000</span>
         {saveState === 'saving' && (
-          <span className="text-xs text-black/25">Saving…</span>
+          <span className="text-xs text-black/25">A guardar…</span>
         )}
         {saveState === 'saved' && (
-          <span className="text-xs text-black/25">Saved</span>
+          <span className="text-xs text-black/25">Guardado</span>
         )}
       </div>
     </div>

@@ -6,14 +6,13 @@ import { createAvailability, deleteAvailability } from '@/lib/api/availability';
 import type { DoctorAvailability } from '@/lib/api/types';
 
 const DAY_NAMES: Record<number, string> = {
-  1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday',
-  5: 'Friday', 6: 'Saturday', 7: 'Sunday',
+  1: 'Segunda-feira', 2: 'Terça-feira', 3: 'Quarta-feira', 4: 'Quinta-feira',
+  5: 'Sexta-feira', 6: 'Sábado', 7: 'Domingo',
 };
 
 function fmt(t: string) {
   const [h, m] = t.split(':');
-  const hour = parseInt(h);
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+  return `${h.padStart(2, '0')}:${m}`;
 }
 
 export function AvailabilityManager({
@@ -45,7 +44,7 @@ export function AvailabilityManager({
         [...prev, created].sort((a, b) => a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time)),
       );
     } catch {
-      setError('Could not save. Make sure end time is after start time.');
+      setError('Não foi possível guardar. Certifique-se de que a hora de fim é posterior à hora de início.');
     } finally {
       setAdding(false);
     }
@@ -57,7 +56,7 @@ export function AvailabilityManager({
       await deleteAvailability(id, token);
       setAvailability((prev) => prev.filter((a) => a.id !== id));
     } catch {
-      setError('Could not remove this window.');
+      setError('Não foi possível remover este horário.');
     }
   };
 
@@ -65,7 +64,7 @@ export function AvailabilityManager({
     <div className="flex flex-col gap-8">
       {/* Current windows */}
       {Object.keys(grouped).length === 0 ? (
-        <p className="text-sm text-black/30 italic">No availability set yet. Add a window below.</p>
+        <p className="text-sm text-black/30 italic">Sem disponibilidade definida. Adicione um horário abaixo.</p>
       ) : (
         <div className="flex flex-col gap-1">
           {[1, 2, 3, 4, 5, 6, 7].filter((d) => grouped[d]).map((day) => (
@@ -100,11 +99,11 @@ export function AvailabilityManager({
 
       {/* Add form */}
       <div className="rounded-2xl p-5 flex flex-col gap-5" style={{ border: '1px solid rgba(0,0,0,0.07)' }}>
-        <p className="text-xs font-semibold text-black/35 uppercase tracking-widest">Add window</p>
+        <p className="text-xs font-semibold text-black/35 uppercase tracking-widest">Adicionar horário</p>
 
         <div className="flex flex-col gap-5">
           <label className="flex flex-col gap-2">
-            <span className="text-xs text-black/35">Day</span>
+            <span className="text-xs text-black/35">Dia</span>
             <select
               value={form.day_of_week}
               onChange={(e) => setForm((f) => ({ ...f, day_of_week: parseInt(e.target.value) }))}
@@ -118,7 +117,7 @@ export function AvailabilityManager({
 
           <div className="grid grid-cols-2 gap-4">
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-black/35">From</span>
+              <span className="text-xs text-black/35">De</span>
               <input
                 type="time"
                 value={form.start_time}
@@ -127,7 +126,7 @@ export function AvailabilityManager({
               />
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-black/35">To</span>
+              <span className="text-xs text-black/35">Até</span>
               <input
                 type="time"
                 value={form.end_time}
@@ -147,7 +146,7 @@ export function AvailabilityManager({
           style={{ background: '#b5471b' }}
         >
           <Plus className="w-4 h-4" />
-          {adding ? 'Saving…' : 'Add window'}
+          {adding ? 'A guardar…' : 'Adicionar horário'}
         </button>
       </div>
     </div>

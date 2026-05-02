@@ -18,6 +18,8 @@ defmodule Cura.Repo.Migrations.CreateMeetings do
       timestamps()
     end
 
-    create unique_index(:meetings, [:doctor_id, :date, :time], name: :meetings_unique_datetime_per_doctor)
+    create unique_index(:meetings, [:doctor_id, :date, :time],
+             name: :meetings_unique_datetime_per_doctor
+           )
   end
 end

@@ -22,10 +22,10 @@ export default async function LoginPage() {
           <Image src="/cura.svg" alt="Cura" width={72} height={19} priority />
           <div className="text-center">
             <h1 className="text-xl font-semibold text-black tracking-tight">
-              Welcome back
+              Bem-vindo/a de volta
             </h1>
             <p className="text-sm text-black/40 mt-0.5">
-              Sign in to your Cura account
+              Entrar na sua conta Cura
             </p>
           </div>
         </div>
@@ -45,7 +45,7 @@ export default async function LoginPage() {
         {/* Back to home */}
         <p className="text-center text-xs text-black/30">
           <Link href="/" className="hover:text-[#b5471b] transition-colors">
-            ← Back to home
+            ← Voltar à página inicial
           </Link>
         </p>
       </div>

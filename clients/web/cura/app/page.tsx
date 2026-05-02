@@ -18,7 +18,7 @@ export default async function LandingPage() {
             href="/login"
             className="text-sm font-medium text-black/50 hover:text-[#b5471b] transition-colors"
           >
-            Sign in
+            Entrar
           </Link>
         }
       />
@@ -45,7 +45,7 @@ export default async function LandingPage() {
             }}
           >
             <Shield className="w-3 h-3" />
-            HIPAA-Compliant · End-to-End Encrypted
+            Conforme HIPAA · Cifrado de Ponta a Ponta
           </div>
 
           {/* Headline */}
@@ -53,14 +53,14 @@ export default async function LandingPage() {
             className="text-6xl sm:text-7xl font-semibold tracking-tight leading-[1.05]"
             style={{ color: '#0f0a07' }}
           >
-            Healthcare,
+            Saúde,
             <br />
-            <span style={{ color: '#b5471b' }}>at your fingertips.</span>
+            <span style={{ color: '#b5471b' }}>ao seu alcance.</span>
           </h1>
 
           {/* Subheadline */}
           <p className="text-lg text-black/45 max-w-xl leading-relaxed">
-            Secure video consultations between doctors and patients — with real‑time AI clinical support built right in.
+            Consultas por vídeo seguras entre médicos e doentes — com suporte clínico de IA em tempo real integrado.
           </p>
 
           {/* CTAs */}
@@ -70,7 +70,7 @@ export default async function LandingPage() {
               className="flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
               style={{ background: '#b5471b' }}
             >
-              I&apos;m a patient
+              Sou doente
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
@@ -82,7 +82,7 @@ export default async function LandingPage() {
                 border: '1px solid rgba(0,0,0,0.08)',
               }}
             >
-              I&apos;m a doctor
+              Sou médico/a
               <ArrowRight className="w-4 h-4 opacity-50" />
             </Link>
           </div>
@@ -93,7 +93,7 @@ export default async function LandingPage() {
       <footer className="border-t border-black/[0.06] px-6 py-8 max-w-5xl mx-auto flex items-center justify-between">
         <Image src="/cura.svg" alt="Cura" width={54} height={14} />
         <p className="text-xs text-black/25">
-          © {new Date().getFullYear()} Cura. All rights reserved.
+          © {new Date().getFullYear()} Cura. Todos os direitos reservados.
         </p>
       </footer>
     </div>

@@ -19,8 +19,8 @@ function formatSize(bytes: number) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
+  return new Date(iso).toLocaleDateString('pt-PT', {
+    day: 'numeric', month: 'short', year: 'numeric',
   });
 }
 
@@ -63,7 +63,7 @@ export function DocumentsPanel({
       const { document } = await uploadDocument(patientId, file, token);
       setDocuments((prev) => [document, ...prev]);
     } catch {
-      setError('Upload failed. Please try again.');
+      setError('Falha no carregamento. Por favor, tente novamente.');
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -81,7 +81,7 @@ export function DocumentsPanel({
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setError('Download failed.');
+      setError('Falha na transferência.');
     } finally {
       setDownloading(null);
     }
@@ -93,7 +93,7 @@ export function DocumentsPanel({
       await deleteDocument(id, token);
       setDocuments((prev) => prev.filter((d) => d.id !== id));
     } catch {
-      setError('Could not delete document.');
+      setError('Não foi possível eliminar o documento.');
     }
   };
 
@@ -154,7 +154,7 @@ export function DocumentsPanel({
           ) : (
             <Upload className="w-3.5 h-3.5" />
           )}
-          {uploading ? 'Uploading…' : 'Upload document'}
+          {uploading ? 'A carregar…' : 'Carregar documento'}
         </button>
       </div>
 
@@ -162,7 +162,7 @@ export function DocumentsPanel({
 
       {/* Document list */}
       {documents.length === 0 ? (
-        <p className="text-xs text-black/30 italic">No documents uploaded yet.</p>
+        <p className="text-xs text-black/30 italic">Sem documentos carregados.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {documents.map((doc) => (

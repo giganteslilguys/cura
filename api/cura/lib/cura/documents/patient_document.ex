@@ -17,6 +17,13 @@ defmodule Cura.Documents.PatientDocument do
   def changeset(doc, attrs) do
     doc
     |> cast(attrs, [:patient_id, :uploaded_by_id, :filename, :content_type, :size, :storage_path])
-    |> validate_required([:patient_id, :uploaded_by_id, :filename, :content_type, :size, :storage_path])
+    |> validate_required([
+      :patient_id,
+      :uploaded_by_id,
+      :filename,
+      :content_type,
+      :size,
+      :storage_path
+    ])
   end
 end

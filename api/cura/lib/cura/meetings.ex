@@ -46,14 +46,14 @@ defmodule Cura.Meetings do
       time = now |> NaiveDateTime.to_time() |> Time.truncate(:second)
 
       create_meeting(%{
-        "doctor_id"  => doctor_id,
+        "doctor_id" => doctor_id,
         "patient_id" => patient.id,
-        "date"       => Date.to_string(date),
-        "time"       => Time.to_string(time),
-        "duration"   => 30,
-        "title"      => title || "On-site Visit",
-        "timezone"   => "UTC",
-        "kind"       => "on_site"
+        "date" => Date.to_string(date),
+        "time" => Time.to_string(time),
+        "duration" => 30,
+        "title" => title || "On-site Visit",
+        "timezone" => "UTC",
+        "kind" => "on_site"
       })
     end
   end
@@ -173,7 +173,10 @@ defmodule Cura.Meetings do
     |> Enum.map(fn minutes -> Time.new!(div(minutes, 60), rem(minutes, 60), 0) end)
   end
 
-  def book_slot(patient_id, %{"doctor_id" => doctor_id, "date" => date_str, "time" => time_str} = attrs) do
+  def book_slot(
+        patient_id,
+        %{"doctor_id" => doctor_id, "date" => date_str, "time" => time_str} = attrs
+      ) do
     normalized_time =
       case String.length(time_str) do
         5 -> time_str <> ":00"
@@ -207,8 +210,8 @@ defmodule Cura.Meetings do
   def find_meetings_due_for_reminder(now) do
     in_24h = NaiveDateTime.add(now, 23 * 3600 + 30 * 60, :second)
     in_25h = NaiveDateTime.add(now, 25 * 3600, :second)
-    in_1h  = NaiveDateTime.add(now, 30 * 60, :second)
-    in_2h  = NaiveDateTime.add(now, 90 * 60, :second)
+    in_1h = NaiveDateTime.add(now, 30 * 60, :second)
+    in_2h = NaiveDateTime.add(now, 90 * 60, :second)
 
     all_scheduled =
       Repo.all(
@@ -220,18 +223,20 @@ defmodule Cura.Meetings do
     for m <- all_scheduled, reduce: [] do
       acc ->
         naive = NaiveDateTime.new!(m.date, m.time)
+
         cond do
           not m.reminder_24h_sent and
-              NaiveDateTime.compare(naive, in_24h) == :gt and
+            NaiveDateTime.compare(naive, in_24h) == :gt and
               NaiveDateTime.compare(naive, in_25h) == :lt ->
             [{m, 24} | acc]
 
           not m.reminder_1h_sent and
-              NaiveDateTime.compare(naive, in_1h) == :gt and
+            NaiveDateTime.compare(naive, in_1h) == :gt and
               NaiveDateTime.compare(naive, in_2h) == :lt ->
             [{m, 1} | acc]
 
-          true -> acc
+          true ->
+            acc
         end
     end
   end
@@ -267,8 +272,8 @@ defmodule Cura.Meetings do
           end)
         end
 
-      profile  = meeting.patient && meeting.patient.patient_profile
-      intake   = meeting.patient_intake
+      profile = meeting.patient && meeting.patient.patient_profile
+      intake = meeting.patient_intake
       docs_ctx = build_documents_context(meeting.patient_id)
 
       patient_ctx = build_patient_context(profile, intake)
@@ -306,7 +311,10 @@ defmodule Cura.Meetings do
         model: "gpt-4o-mini",
         temperature: 0.2,
         messages: [
-          %{role: "system", content: "You are a clinical documentation assistant. Output only valid JSON."},
+          %{
+            role: "system",
+            content: "You are a clinical documentation assistant. Output only valid JSON."
+          },
           %{role: "user", content: prompt}
         ]
       }
@@ -317,7 +325,12 @@ defmodule Cura.Meetings do
 
       case Req.post(@openai_url, json: body, headers: headers, receive_timeout: 60_000) do
         {:ok, %{status: 200, body: %{"choices" => [%{"message" => %{"content" => content}} | _]}}} ->
-          cleaned = content |> String.replace(~r/^```json\s*/m, "") |> String.replace(~r/```\s*$/m, "") |> String.trim()
+          cleaned =
+            content
+            |> String.replace(~r/^```json\s*/m, "")
+            |> String.replace(~r/```\s*$/m, "")
+            |> String.trim()
+
           case Jason.decode(cleaned) do
             {:ok, note} -> {:ok, normalize_soap_note(note)}
             err ->
@@ -337,6 +350,7 @@ defmodule Cura.Meetings do
   end
 
   defp build_documents_context(nil), do: ""
+
   defp build_documents_context(patient_id) do
     docs = Cura.Documents.list_documents(patient_id)
     if docs == [], do: "", else: do_build_documents_context(docs)
@@ -347,11 +361,14 @@ defmodule Cura.Meetings do
       docs
       |> Enum.map(fn doc ->
         path = Cura.Documents.full_path(doc)
+
         case System.cmd("pdftotext", [path, "-"], stderr_to_stdout: false) do
           {text, 0} ->
             trimmed = String.trim(text)
             if trimmed != "", do: "--- #{doc.filename} ---\n#{trimmed}", else: nil
-          _ -> nil
+
+          _ ->
+            nil
         end
       end)
       |> Enum.reject(&is_nil/1)
@@ -372,22 +389,29 @@ defmodule Cura.Meetings do
   defp allergy_substance(_), do: "unknown"
 
   defp build_patient_context(nil, nil), do: ""
+
   defp build_patient_context(profile, intake) do
     lines =
-      (if profile do
-        meds      = Enum.map_join(profile.medications || [], ", ", &medication_name/1)
+      if profile do
+        meds = Enum.map_join(profile.medications || [], ", ", &medication_name/1)
         allergies = Enum.map_join(profile.allergies || [], ", ", &allergy_substance/1)
         conditions = Enum.join(profile.conditions || [], ", ")
-        ["PATIENT DATA:",
-         "- Medications: #{if meds == "", do: "none", else: meds}",
-         "- Allergies: #{if allergies == "", do: "none", else: allergies}",
-         "- Conditions: #{if conditions == "", do: "none", else: conditions}"]
-      else [] end) ++
-      (if intake do
-        ["PRE-VISIT INTAKE:",
-         "- Reason: #{intake["reason"]}"] ++
-        (if intake["symptoms"], do: ["- Symptoms: #{intake["symptoms"]}"], else: [])
-      else [] end)
+
+        [
+          "PATIENT DATA:",
+          "- Medications: #{if meds == "", do: "none", else: meds}",
+          "- Allergies: #{if allergies == "", do: "none", else: allergies}",
+          "- Conditions: #{if conditions == "", do: "none", else: conditions}"
+        ]
+      else
+        []
+      end ++
+        if intake do
+          ["PRE-VISIT INTAKE:", "- Reason: #{intake["reason"]}"] ++
+            if intake["symptoms"], do: ["- Symptoms: #{intake["symptoms"]}"], else: []
+        else
+          []
+        end
 
     Enum.join(lines, "\n")
   end

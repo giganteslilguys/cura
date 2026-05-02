@@ -13,8 +13,8 @@ export default async function SignInPage() {
       <main className="flex min-h-screen items-center justify-center px-6">
         <div className="w-full max-w-sm flex flex-col gap-10">
           <div>
-            <h1 className="text-2xl font-semibold text-black">Sign in</h1>
-            <p className="text-sm text-black/40 mt-1">Welcome back to cura</p>
+            <h1 className="text-2xl font-semibold text-black">Entrar</h1>
+            <p className="text-sm text-black/40 mt-1">Bem-vindo/a de volta ao Cura</p>
           </div>
           <SignInForm />
         </div>

@@ -12,12 +12,32 @@ import {
   VideoOff,
 } from 'lucide-react';
 import { Channel, Socket } from 'phoenix';
-import type { Diagnosis, Meeting, Prescription, Suggestion, TranscriptEntry, User, VisitSummary } from '@/lib/api/types';
+import type {
+  Diagnosis,
+  Meeting,
+  Prescription,
+  Suggestion,
+  TranscriptEntry,
+  User,
+  VisitSummary,
+} from '@/lib/api/types';
+import {
+  MIN_CHUNK_BYTES,
+  SPEECH_FRAMES_REQUIRED,
+  isSpeechFrame,
+} from '@/lib/audio/vad';
 import { RefObject, useEffect, useRef, useState } from 'react';
+import {
+  completeMeeting,
+  generateSoapDraft,
+  getMeeting,
+  getMeetingTranscript,
+  saveVisitSummary,
+  submitMeetingIntake,
+  updateMeetingNotes,
+} from '@/lib/api/meetings';
 
 import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
-import { completeMeeting, generateSoapDraft, getMeeting, getMeetingTranscript, saveVisitSummary, submitMeetingIntake, updateMeetingNotes } from '@/lib/api/meetings';
-import { isSpeechFrame, MIN_CHUNK_BYTES, SPEECH_FRAMES_REQUIRED } from '@/lib/audio/vad';
 import { getOnSitePhase } from '@/lib/meeting/phase';
 import { useRouter } from 'next/navigation';
 
@@ -225,8 +245,8 @@ export function MeetingRoom({ meeting, currentUser, token, forceReport }: Props)
         if (cancelled) return;
         setError(
           err instanceof Error
-            ? `Could not access camera/microphone: ${err.message}`
-            : 'Could not access camera/microphone.',
+            ? `Não foi possível aceder à câmara/microfone: ${err.message}`
+            : 'Não foi possível aceder à câmara/microfone.',
         );
         setConnState('failed');
         return;
@@ -412,7 +432,7 @@ export function MeetingRoom({ meeting, currentUser, token, forceReport }: Props)
 
       channel.join().receive('error', ({ reason }: { reason: string }) => {
         if (cancelled) return;
-        setError(`Could not join room: ${reason}`);
+        setError(`Não foi possível entrar na sala: ${reason}`);
         setConnState('failed');
       });
     };
@@ -577,8 +597,8 @@ function OnSiteMeetingRoom({
         if (cancelled) return;
         setError(
           err instanceof Error
-            ? `Could not access microphone: ${err.message}`
-            : 'Could not access microphone.',
+            ? `Não foi possível aceder ao microfone: ${err.message}`
+            : 'Não foi possível aceder ao microfone.',
         );
         return;
       }
@@ -766,7 +786,7 @@ function OnSiteMeetingRoom({
           <div className="min-w-0">
             <p className="font-semibold text-stone-900 truncate">{patientName}</p>
             <p className="text-xs text-stone-400 truncate">
-              {meeting.title} · On-site visit
+              {meeting.title} · Consulta presencial
             </p>
           </div>
         </div>
@@ -779,8 +799,12 @@ function OnSiteMeetingRoom({
                 : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
             }`}
           >
-            {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            {muted ? 'Mic muted' : 'Mic on'}
+            {muted ? (
+              <MicOff className="w-4 h-4" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
+            {muted ? 'Microfone em silêncio' : 'Microfone ativo'}
           </button>
           <button
             onClick={handleEnd}
@@ -788,7 +812,7 @@ function OnSiteMeetingRoom({
             className="px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5"
           >
             <PhoneOff className="w-4 h-4" />
-            {ending ? 'Ending…' : 'End visit'}
+            {ending ? 'A terminar…' : 'Terminar consulta'}
           </button>
         </div>
       </header>
@@ -798,12 +822,12 @@ function OnSiteMeetingRoom({
         <div className="flex-1 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden min-w-0">
           <div className="px-5 pt-4 pb-3 border-b border-stone-100 shrink-0">
             <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-              Live transcript
+              Transcrição ao vivo
             </p>
             <p className="text-xs text-stone-400 mt-0.5">
               {transcript.length === 0
-                ? 'Listening for speech…'
-                : `${transcript.length} segment${transcript.length === 1 ? '' : 's'}`}
+                ? 'A aguardar fala…'
+                : `${transcript.length} ${transcript.length === 1 ? 'segmento' : 'segmentos'}`}
             </p>
           </div>
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
@@ -812,7 +836,7 @@ function OnSiteMeetingRoom({
             )}
             {transcript.length === 0 && !error && (
               <p className="text-sm text-stone-400 italic">
-                The transcript will appear here as the visit unfolds.
+                A transcrição aparecerá aqui à medida que a consulta decorre.
               </p>
             )}
             {transcript.map((entry) => (
@@ -842,16 +866,18 @@ function OnSiteMeetingRoom({
           <div className="px-5 pt-4 pb-3 border-b border-stone-100 shrink-0">
             <div className="flex items-center gap-2">
               <SparkleIcon className="w-4 h-4 text-orange-500 shrink-0" />
-              <p className="text-sm font-semibold text-stone-900">Clinical Hints</p>
+              <p className="text-sm font-semibold text-stone-900">
+                Sugestões Clínicas
+              </p>
             </div>
             <p className="text-xs text-stone-400 mt-0.5 ml-6">
-              Live suggestions as the visit unfolds
+              Sugestões em tempo real à medida que a consulta decorre
             </p>
           </div>
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {suggestions.length === 0 ? (
               <p className="text-xs text-stone-400 italic">
-                Suggestions will appear as the conversation progresses.
+                As sugestões aparecerão à medida que a conversa progride.
               </p>
             ) : (
               suggestions.map((suggestion) => (
@@ -873,16 +899,16 @@ function OnSiteMeetingRoom({
 function OnSiteNotForPatient({ onBack }: { onBack: () => void }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 text-stone-900 px-6 text-center gap-4">
-      <p className="text-xl font-semibold">On-site visit</p>
+      <p className="text-xl font-semibold">Consulta presencial</p>
       <p className="text-sm text-stone-500 max-w-md">
-        This is an on-site visit — your doctor is recording it in person. There&apos;s
-        nothing to do here.
+        Esta é uma consulta presencial — o seu médico está a registá-la em pessoa.
+        Não há nada a fazer aqui.
       </p>
       <button
         onClick={onBack}
         className="px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity"
       >
-        Back to appointments
+        Voltar às consultas
       </button>
     </div>
   );
@@ -970,7 +996,7 @@ function DoctorPostMeetingView({
       if (doSubmit) setSubmitted(true);
       setLastSaved(new Date());
     } catch {
-      setSaveError("Failed to save. Please try again.");
+      setSaveError('Falha ao guardar. Por favor, tente novamente.');
     } finally {
       setSaving(false);
     }
@@ -995,7 +1021,9 @@ function DoctorPostMeetingView({
       if (note.follow_up_appointment) setFollowUp(note.follow_up_appointment);
       if (note.when_to_seek_care?.length) setWhenToSeekCare(note.when_to_seek_care);
     } catch {
-      setSaveError("Could not generate draft. Check that a transcript is available.");
+      setSaveError(
+        'Não foi possível gerar o rascunho. Verifique se existe uma transcrição disponível.',
+      );
     } finally {
       setGenerating(false);
     }
@@ -1028,15 +1056,22 @@ function DoctorPostMeetingView({
           {submitted ? (
             <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full">
               <CheckIcon className="w-3.5 h-3.5" />
-              Summary submitted
+              Resumo submetido
             </span>
           ) : lastSaved ? (
             <span className="text-xs text-stone-400">
-              Draft saved {lastSaved.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              Rascunho guardado às{' '}
+              {lastSaved.toLocaleTimeString('pt-PT', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </span>
           ) : null}
-          <button onClick={onBack} className="px-4 py-2 text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">
-            Back to appointments
+          <button
+            onClick={onBack}
+            className="px-4 py-2 text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors"
+          >
+            Voltar às consultas
           </button>
         </div>
       </header>
@@ -1045,22 +1080,33 @@ function DoctorPostMeetingView({
         {/* Left: Transcript */}
         <div className="w-64 shrink-0 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden">
           <div className="px-4 pt-4 pb-3 border-b border-stone-100 shrink-0">
-            <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Visit Transcript</p>
+            <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
+              Transcrição da Consulta
+            </p>
             {!transcriptLoading && (
               <p className="text-xs text-stone-400 mt-0.5">
-                {transcript.length === 0 ? "No entries recorded" : `${transcript.length} segment${transcript.length === 1 ? "" : "s"}`}
+                {transcript.length === 0
+                  ? 'Sem entradas registadas'
+                  : `${transcript.length} ${transcript.length === 1 ? 'segmento' : 'segmentos'}`}
               </p>
             )}
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {transcriptLoading ? (
-              <p className="text-xs text-stone-400 italic">Loading transcript…</p>
+              <p className="text-xs text-stone-400 italic">
+                A carregar transcrição…
+              </p>
             ) : transcript.length === 0 ? (
-              <p className="text-xs text-stone-400 italic">No transcript entries for this visit.</p>
+              <p className="text-xs text-stone-400 italic">
+                Sem entradas de transcrição para esta consulta.
+              </p>
             ) : (
               transcript.map((entry) => {
                 const ts = new Date(entry.timestamp);
-                const time = ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                const time = ts.toLocaleTimeString('pt-PT', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
                 return (
                   <div key={entry.id} className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-2">
@@ -1083,10 +1129,12 @@ function DoctorPostMeetingView({
             <div className="px-6 pt-5 pb-4 border-b border-stone-100 shrink-0 relative">
               <div className="flex items-center gap-2">
                 <StethoscopeIcon className="w-4 h-4 text-orange-500 shrink-0" />
-                <h2 className="font-semibold text-stone-900">Summary</h2>
+                <h2 className="font-semibold text-stone-900">Resumo</h2>
               </div>
               {submitted && (
-                <p className="text-xs text-stone-400 mt-1 ml-6">This summary has been submitted and is read-only.</p>
+                <p className="text-xs text-stone-400 mt-1 ml-6">
+                  Este resumo foi submetido e é só de leitura.
+                </p>
               )}
               {generating && (
                 <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 border border-orange-100 cura-ai-shimmer">
@@ -1100,18 +1148,48 @@ function DoctorPostMeetingView({
 
             <div className={`flex-1 overflow-y-auto px-6 py-5 space-y-6 transition-opacity duration-300 ${generating ? 'opacity-60' : 'opacity-100'}`}>
               {/* Vitals */}
-              <FormSection icon={<HeartPulseIcon className="w-4 h-4" />} title="Vitals">
+              <FormSection
+                icon={<HeartPulseIcon className="w-4 h-4" />}
+                title="Sinais Vitais"
+              >
                 <div className="grid grid-cols-2 gap-3">
-                  <FormInput label="Blood Pressure" value={bpInput} onChange={setBpInput} placeholder="e.g. 120/80 mmHg" disabled={submitted} />
-                  <FormInput label="Heart Rate" value={hrInput} onChange={setHrInput} placeholder="e.g. 72 bpm" disabled={submitted} />
-                  <FormInput label="Temperature" value={tempInput} onChange={setTempInput} placeholder="e.g. 98.6°F" disabled={submitted} />
-                  <FormInput label="Weight" value={weightInput} onChange={setWeightInput} placeholder="e.g. 165 lbs" disabled={submitted} />
+                  <FormInput
+                    label="Pressão Arterial"
+                    value={bpInput}
+                    onChange={setBpInput}
+                    placeholder="ex. 120/80 mmHg"
+                    disabled={submitted}
+                  />
+                  <FormInput
+                    label="Frequência Cardíaca"
+                    value={hrInput}
+                    onChange={setHrInput}
+                    placeholder="ex. 72 bpm"
+                    disabled={submitted}
+                  />
+                  <FormInput
+                    label="Temperatura"
+                    value={tempInput}
+                    onChange={setTempInput}
+                    placeholder="ex. 37°C"
+                    disabled={submitted}
+                  />
+                  <FormInput
+                    label="Peso"
+                    value={weightInput}
+                    onChange={setWeightInput}
+                    placeholder="ex. 75 kg"
+                    disabled={submitted}
+                  />
                 </div>
               </FormSection>
 
               {/* Diagnoses */}
-              <FormSection icon={<StethoscopeIcon className="w-4 h-4" />} title="Diagnoses">
-                <div className="space-y-3">
+              <FormSection
+                icon={<StethoscopeIcon className="w-4 h-4" />}
+                title="Diagnósticos"
+              >
+                <div className="space-y-2">
                   {diagnoses.map((d, i) => (
                     <div key={i} className="border border-stone-200 rounded-xl p-3 space-y-2">
                       <div className="flex items-center justify-between">
@@ -1133,51 +1211,74 @@ function DoctorPostMeetingView({
                         value={d.condition}
                         onChange={e => updateDiagnosis(i, { condition: e.target.value })}
                         disabled={submitted}
-                        placeholder="Condition name"
-                        className={`min-w-0 ${inputCls}`}
+                        placeholder="Nome da condição"
+                        className={`flex-1 ${inputCls}`}
                       />
-                      <div className="flex gap-2 items-center">
-                        <input
-                          value={d.icd_code ?? ""}
-                          onChange={e => updateDiagnosis(i, { icd_code: e.target.value || null })}
-                          disabled={submitted}
-                          placeholder="ICD-10"
-                          className={`max-w-20 ${inputCls}`}
-                        />
-                        <select
-                          value={d.type}
-                          onChange={e => updateDiagnosis(i, { type: e.target.value as "primary" | "secondary" })}
-                          disabled={submitted}
-                          className={`w-32 ${inputCls}`}
+                      <input
+                        value={d.icd_code ?? ''}
+                        onChange={(e) =>
+                          updateDiagnosis(i, {
+                            icd_code: e.target.value || null,
+                          })
+                        }
+                        disabled={submitted}
+                        placeholder="ICD-10"
+                        className={`w-24 ${inputCls}`}
+                      />
+                      <select
+                        value={d.type}
+                        onChange={(e) =>
+                          updateDiagnosis(i, {
+                            type: e.target.value as 'primary' | 'secondary',
+                          })
+                        }
+                        disabled={submitted}
+                        className={`w-28 ${inputCls}`}
+                      >
+                        <option value="primary">Principal</option>
+                        <option value="secondary">Secundário</option>
+                      </select>
+                      {!submitted && (
+                        <button
+                          onClick={() => removeDiagnosis(i)}
+                          className="text-stone-400 hover:text-red-500 transition-colors shrink-0"
                         >
-                          <option value="primary">Primary</option>
-                          <option value="secondary">Secondary</option>
-                        </select>
-                      </div>
+                          <XIcon className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                   {!submitted && (
-                    <button onClick={addDiagnosis} className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
-                      <PlusIcon className="w-4 h-4" /> Add diagnosis
+                    <button
+                      onClick={addDiagnosis}
+                      className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Adicionar diagnóstico
                     </button>
                   )}
                 </div>
               </FormSection>
 
               {/* Clinical Assessment */}
-              <FormSection icon={<ClipboardIcon className="w-4 h-4" />} title="Clinical Assessment">
+              <FormSection
+                icon={<ClipboardIcon className="w-4 h-4" />}
+                title="Avaliação Clínica"
+              >
                 <textarea
                   value={clinicalAssessment}
                   onChange={e => setClinicalAssessment(e.target.value)}
                   disabled={submitted}
                   rows={3}
-                  placeholder="Enter clinical assessment notes…"
+                  placeholder="Insira notas de avaliação clínica…"
                   className="w-full px-3 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm text-stone-800 placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-orange-400/50 focus:border-transparent resize-none disabled:opacity-60 disabled:cursor-default"
                 />
               </FormSection>
 
               {/* Treatment Plan */}
-              <FormSection icon={<ClipboardCheckIcon className="w-4 h-4" />} title="Treatment Plan">
+              <FormSection
+                icon={<ClipboardCheckIcon className="w-4 h-4" />}
+                title="Plano de Tratamento"
+              >
                 <div className="space-y-2">
                   {treatmentPlan.map((item, i) => (
                     <div key={i} className="flex gap-2 items-center">
@@ -1185,7 +1286,7 @@ function DoctorPostMeetingView({
                         value={item}
                         onChange={e => updateTreatmentItem(i, e.target.value)}
                         disabled={submitted}
-                        placeholder="Treatment item…"
+                        placeholder="Item do tratamento…"
                         className={`flex-1 ${inputCls}`}
                       />
                       {!submitted && (
@@ -1196,20 +1297,28 @@ function DoctorPostMeetingView({
                     </div>
                   ))}
                   {!submitted && (
-                    <button onClick={addTreatmentItem} className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
-                      <PlusIcon className="w-4 h-4" /> Add item
+                    <button
+                      onClick={addTreatmentItem}
+                      className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Adicionar item
                     </button>
                   )}
                 </div>
               </FormSection>
 
               {/* Prescriptions */}
-              <FormSection icon={<PillIcon className="w-4 h-4" />} title="Prescriptions">
+              <FormSection
+                icon={<PillIcon className="w-4 h-4" />}
+                title="Prescrições"
+              >
                 <div className="space-y-3">
                   {prescriptions.map((rx, i) => (
                     <div key={i} className="border border-stone-200 rounded-xl p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-stone-400">Prescription {i + 1}</span>
+                        <span className="text-xs font-medium text-stone-400">
+                          Prescrição {i + 1}
+                        </span>
                         {!submitted && (
                           <button onClick={() => removePrescription(i)} className="text-stone-400 hover:text-red-500 transition-colors">
                             <XIcon className="w-3.5 h-3.5" />
@@ -1220,34 +1329,70 @@ function DoctorPostMeetingView({
                         value={rx.name}
                         onChange={e => updatePrescription(i, { name: e.target.value })}
                         disabled={submitted}
-                        placeholder="Medication name"
+                        placeholder="Nome do medicamento"
                         className={inputCls}
                       />
                       <div className="grid grid-cols-3 gap-2">
-                        <input value={rx.dosage ?? ""} onChange={e => updatePrescription(i, { dosage: e.target.value || null })} disabled={submitted} placeholder="Dosage" className={inputCls} />
-                        <input value={rx.quantity ?? ""} onChange={e => updatePrescription(i, { quantity: e.target.value || null })} disabled={submitted} placeholder="Quantity" className={inputCls} />
-                        <input value={rx.refills ?? ""} onChange={e => updatePrescription(i, { refills: e.target.value || null })} disabled={submitted} placeholder="Refills" className={inputCls} />
+                        <input
+                          value={rx.dosage ?? ''}
+                          onChange={(e) =>
+                            updatePrescription(i, {
+                              dosage: e.target.value || null,
+                            })
+                          }
+                          disabled={submitted}
+                          placeholder="Dosagem"
+                          className={inputCls}
+                        />
+                        <input
+                          value={rx.quantity ?? ''}
+                          onChange={(e) =>
+                            updatePrescription(i, {
+                              quantity: e.target.value || null,
+                            })
+                          }
+                          disabled={submitted}
+                          placeholder="Quantidade"
+                          className={inputCls}
+                        />
+                        <input
+                          value={rx.refills ?? ''}
+                          onChange={(e) =>
+                            updatePrescription(i, {
+                              refills: e.target.value || null,
+                            })
+                          }
+                          disabled={submitted}
+                          placeholder="Recargas"
+                          className={inputCls}
+                        />
                       </div>
                       <textarea
                         value={rx.instructions ?? ""}
                         onChange={e => updatePrescription(i, { instructions: e.target.value || null })}
                         disabled={submitted}
                         rows={2}
-                        placeholder="Dosage instructions…"
+                        placeholder="Instruções de dosagem…"
                         className="w-full px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-sm text-stone-800 placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-orange-400/50 focus:border-transparent resize-none disabled:opacity-60 disabled:cursor-default"
                       />
                     </div>
                   ))}
                   {!submitted && (
-                    <button onClick={addPrescription} className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
-                      <PlusIcon className="w-4 h-4" /> Add prescription
+                    <button
+                      onClick={addPrescription}
+                      className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Adicionar prescrição
                     </button>
                   )}
                 </div>
               </FormSection>
 
               {/* Lab Orders */}
-              <FormSection icon={<FlaskIcon className="w-4 h-4" />} title="Lab Orders">
+              <FormSection
+                icon={<FlaskIcon className="w-4 h-4" />}
+                title="Análises Laboratoriais"
+              >
                 <div className="space-y-2">
                   {labOrders.map((order, i) => (
                     <div key={i} className="flex gap-2 items-center">
@@ -1255,7 +1400,7 @@ function DoctorPostMeetingView({
                         value={order}
                         onChange={e => updateLabOrder(i, e.target.value)}
                         disabled={submitted}
-                        placeholder="Lab order…"
+                        placeholder="Pedido de análise…"
                         className={`flex-1 ${inputCls}`}
                       />
                       {!submitted && (
@@ -1266,26 +1411,35 @@ function DoctorPostMeetingView({
                     </div>
                   ))}
                   {!submitted && (
-                    <button onClick={addLabOrder} className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
-                      <PlusIcon className="w-4 h-4" /> Add order
+                    <button
+                      onClick={addLabOrder}
+                      className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Adicionar pedido
                     </button>
                   )}
                 </div>
               </FormSection>
 
               {/* Follow-Up Appointment */}
-              <FormSection icon={<CalendarIcon className="w-4 h-4" />} title="Follow-Up Appointment">
+              <FormSection
+                icon={<CalendarIcon className="w-4 h-4" />}
+                title="Consulta de Seguimento"
+              >
                 <input
                   value={followUp}
                   onChange={e => setFollowUp(e.target.value)}
                   disabled={submitted}
-                  placeholder="e.g. Return in 4 weeks, or schedule if symptoms worsen"
+                  placeholder="ex. Regressar em 4 semanas, ou marcar se os sintomas piorarem"
                   className={inputCls}
                 />
               </FormSection>
 
               {/* When to Seek Immediate Care */}
-              <FormSection icon={<AlertTriangleIcon className="w-4 h-4" />} title="When to Seek Immediate Care">
+              <FormSection
+                icon={<AlertTriangleIcon className="w-4 h-4" />}
+                title="Quando Procurar Cuidados Imediatos"
+              >
                 <div className="space-y-2">
                   {whenToSeekCare.map((item, i) => (
                     <div key={i} className="flex gap-2 items-center">
@@ -1293,7 +1447,7 @@ function DoctorPostMeetingView({
                         value={item}
                         onChange={e => updateWhenToSeekCare(i, e.target.value)}
                         disabled={submitted}
-                        placeholder="Warning sign…"
+                        placeholder="Sinal de alerta…"
                         className={`flex-1 ${inputCls}`}
                       />
                       {!submitted && (
@@ -1304,8 +1458,11 @@ function DoctorPostMeetingView({
                     </div>
                   ))}
                   {!submitted && (
-                    <button onClick={addWhenToSeekCare} className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors">
-                      <PlusIcon className="w-4 h-4" /> Add item
+                    <button
+                      onClick={addWhenToSeekCare}
+                      className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-700 font-medium transition-colors"
+                    >
+                      <PlusIcon className="w-4 h-4" /> Adicionar item
                     </button>
                   )}
                 </div>
@@ -1321,24 +1478,26 @@ function DoctorPostMeetingView({
                     disabled={generating || saving}
                     className={`flex items-center gap-1.5 px-5 py-2.5 border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:cursor-not-allowed rounded-full text-sm font-medium transition-colors ${generating ? 'cura-ai-shimmer disabled:opacity-100' : 'disabled:opacity-40'}`}
                   >
-                    <Sparkles className={`w-3.5 h-3.5 ${generating ? 'cura-ai-pulse' : ''}`} />
-                    {generating ? "Generating…" : "Generate draft"}
+                    <Sparkles className="w-3.5 h-3.5" />
+                    {generating ? 'A gerar…' : 'Gerar rascunho'}
                   </button>
                   <button
                     onClick={() => handleSave(false)}
                     disabled={saving || generating}
                     className="px-5 py-2.5 bg-stone-100 hover:bg-stone-200 disabled:opacity-40 disabled:cursor-not-allowed text-stone-700 rounded-full text-sm font-medium transition-colors"
                   >
-                    {saving ? "Saving…" : "Save draft"}
+                    {saving ? 'A guardar…' : 'Guardar rascunho'}
                   </button>
                   <button
                     onClick={() => handleSave(true)}
                     disabled={saving || generating}
                     className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full text-sm font-semibold transition-colors"
                   >
-                    Submit & finalize
+                    Submeter e finalizar
                   </button>
-                  <p className="text-xs text-stone-400 ml-1">Submitting locks the summary permanently.</p>
+                  <p className="text-xs text-stone-400 ml-1">
+                    A submissão bloqueia o resumo permanentemente.
+                  </p>
                 </div>
               </div>
             )}
@@ -1349,57 +1508,77 @@ function DoctorPostMeetingView({
         <aside className="w-60 shrink-0 flex flex-col gap-3 overflow-y-auto">
           {meeting.patient_intake ? (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
-              <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Patient intake</p>
+              <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
+                Informação pré-consulta
+              </p>
               <div className="flex flex-col gap-2">
                 <div>
-                  <p className="text-xs text-stone-400 mb-0.5">Reason</p>
-                  <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.reason}</p>
+                  <p className="text-xs text-stone-400 mb-0.5">Motivo</p>
+                  <p className="text-xs text-stone-700 leading-relaxed">
+                    {meeting.patient_intake.reason}
+                  </p>
                 </div>
                 {meeting.patient_intake.symptoms && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-0.5">Symptoms</p>
-                    <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.symptoms}</p>
+                    <p className="text-xs text-stone-400 mb-0.5">Sintomas</p>
+                    <p className="text-xs text-stone-700 leading-relaxed">
+                      {meeting.patient_intake.symptoms}
+                    </p>
                   </div>
                 )}
                 {meeting.patient_intake.notes && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-0.5">Notes</p>
-                    <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.notes}</p>
+                    <p className="text-xs text-stone-400 mb-0.5">Notas</p>
+                    <p className="text-xs text-stone-700 leading-relaxed">
+                      {meeting.patient_intake.notes}
+                    </p>
                   </div>
                 )}
               </div>
             </div>
           ) : (
             <div className="bg-stone-50 rounded-xl border border-stone-200 px-4 py-3 shrink-0">
-              <p className="text-xs text-stone-400 italic">No pre-visit intake on file.</p>
+              <p className="text-xs text-stone-400 italic">
+                Sem informação pré-consulta disponível.
+              </p>
             </div>
           )}
 
           {profile && (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
-              <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Patient profile</p>
+              <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
+                Perfil do doente
+              </p>
               <div className="flex flex-col gap-2">
                 {profile.date_of_birth && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-0.5">Date of birth</p>
-                    <p className="text-xs text-stone-700">{profile.date_of_birth}</p>
+                    <p className="text-xs text-stone-400 mb-0.5">
+                      Data de nascimento
+                    </p>
+                    <p className="text-xs text-stone-700">
+                      {profile.date_of_birth}
+                    </p>
                   </div>
                 )}
                 {profile.sex && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-0.5">Sex</p>
-                    <p className="text-xs text-stone-700 capitalize">{profile.sex}</p>
+                    <p className="text-xs text-stone-400 mb-0.5">Sexo</p>
+                    <p className="text-xs text-stone-700 capitalize">
+                      {profile.sex}
+                    </p>
                   </div>
                 )}
                 {profile.bmi !== null && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-0.5">BMI</p>
-                    <p className="text-xs text-stone-700">{profile.bmi?.toFixed(1)}</p>
+                    <p className="text-xs text-stone-400 mb-0.5">IMC</p>
+                    <p className="text-xs text-stone-700">
+                      {profile.bmi?.toFixed(1)}
+                    </p>
                   </div>
                 )}
                 {profile.medications.length > 0 && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-1">Medications</p>
+                    <p className="text-xs text-stone-400 mb-1">Medicação</p>
                     <ul className="space-y-1">
                       {profile.medications.map((m, i) => (
                         <li key={i} className="text-xs text-stone-700">
@@ -1411,7 +1590,7 @@ function DoctorPostMeetingView({
                 )}
                 {profile.allergies.length > 0 && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-1">Allergies</p>
+                    <p className="text-xs text-stone-400 mb-1">Alergias</p>
                     <ul className="space-y-1">
                       {profile.allergies.map((a, i) => (
                         <li key={i} className={`text-xs font-medium ${a.severity === "severe" ? "text-red-600" : a.severity === "moderate" ? "text-orange-500" : "text-stone-700"}`}>
@@ -1423,7 +1602,7 @@ function DoctorPostMeetingView({
                 )}
                 {profile.conditions.length > 0 && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-1">Conditions</p>
+                    <p className="text-xs text-stone-400 mb-1">Condições</p>
                     <ul className="space-y-0.5">
                       {profile.conditions.map((c, i) => (
                         <li key={i} className="text-xs text-stone-700">{c}</li>
@@ -1541,7 +1720,7 @@ function DoctorMeetingRoom({
 
   const patientName = patient
     ? `${patient.first_name} ${patient.last_name}`
-    : 'Patient';
+    : 'Doente';
 
   return (
     <div
@@ -1556,13 +1735,13 @@ function DoctorMeetingRoom({
         </div>
         <div className="flex items-center gap-6">
           <span className="text-xs text-black/20">
-            HIPAA-compliant · Encrypted
+            Conformidade HIPAA · Encriptado
           </span>
           <button
             onClick={onEndCall}
             className="px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
           >
-            <DoorOpen className="w-4 h-4" /> End visit
+            <DoorOpen className="w-4 h-4" /> Terminar consulta
           </button>
         </div>
       </div>
@@ -1592,8 +1771,8 @@ function DoctorMeetingRoom({
                 <span className="w-1.5 h-1.5 rounded-full bg-stone-400 animate-pulse" />
                 <span className="text-white/70 text-xs">
                   {connState === 'connecting'
-                    ? 'Connecting…'
-                    : `Waiting for ${patientName}…`}
+                    ? 'A ligar…'
+                    : `À espera de ${patientName}…`}
                 </span>
               </div>
             )}
@@ -1603,7 +1782,7 @@ function DoctorMeetingRoom({
               <div className="flex items-center gap-2 bg-black/30 backdrop-blur-xl rounded-full px-4 py-2.5 border border-white/10">
                 <button
                   onClick={onToggleMute}
-                  aria-label={muted ? 'Unmute' : 'Mute'}
+                  aria-label={muted ? 'Ativar microfone' : 'Silenciar'}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
                     muted
                       ? 'bg-[#b5471b] text-white'
@@ -1618,7 +1797,7 @@ function DoctorMeetingRoom({
                 </button>
                 <button
                   onClick={onToggleVideo}
-                  aria-label={videoOff ? 'Turn camera on' : 'Turn camera off'}
+                  aria-label={videoOff ? 'Ligar câmara' : 'Desligar câmara'}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
                     videoOff
                       ? 'bg-[#b5471b] text-white'
@@ -1654,12 +1833,12 @@ function DoctorMeetingRoom({
           {/* Doctor Notes */}
           <div className="flex-1 min-h-0 border-t border-black/[0.06] pt-4 pb-2 flex flex-col">
             <span className="text-xs font-medium text-black/35 uppercase tracking-widest mb-3">
-              Notes
+              Notas
             </span>
             <textarea
               value={doctorNotes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              placeholder="Type your notes here…"
+              placeholder="Escreva as suas notas aqui…"
               maxLength={1000}
               className="flex-1 w-full resize-none text-xs text-stone-700 leading-relaxed bg-transparent placeholder:text-black/20 focus:outline-none"
             />
@@ -1672,18 +1851,18 @@ function DoctorMeetingRoom({
           {meeting.patient_intake ? (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
               <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-                Patient intake
+                Informação pré-consulta
               </p>
               <div className="flex flex-col gap-2">
                 <div>
-                  <p className="text-xs text-stone-400 mb-0.5">Reason</p>
+                  <p className="text-xs text-stone-400 mb-0.5">Motivo</p>
                   <p className="text-xs text-stone-700 leading-relaxed">
                     {meeting.patient_intake.reason}
                   </p>
                 </div>
                 {meeting.patient_intake.symptoms && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-0.5">Symptoms</p>
+                    <p className="text-xs text-stone-400 mb-0.5">Sintomas</p>
                     <p className="text-xs text-stone-700 leading-relaxed">
                       {meeting.patient_intake.symptoms}
                     </p>
@@ -1691,7 +1870,7 @@ function DoctorMeetingRoom({
                 )}
                 {meeting.patient_intake.notes && (
                   <div>
-                    <p className="text-xs text-stone-400 mb-0.5">Notes</p>
+                    <p className="text-xs text-stone-400 mb-0.5">Notas</p>
                     <p className="text-xs text-stone-700 leading-relaxed">
                       {meeting.patient_intake.notes}
                     </p>
@@ -1702,7 +1881,7 @@ function DoctorMeetingRoom({
           ) : (
             <div className="bg-stone-50 rounded-xl border border-stone-200 px-4 py-3 shrink-0">
               <p className="text-xs text-stone-400 italic">
-                Patient has not filled in pre-visit information yet.
+                O doente ainda não preencheu a informação pré-consulta.
               </p>
             </div>
           )}
@@ -1712,18 +1891,18 @@ function DoctorMeetingRoom({
               <div className="flex items-center gap-2 mb-0.5">
                 <SparkleIcon className="w-4 h-4 text-orange-500 shrink-0" />
                 <h2 className="font-semibold text-stone-900 text-sm">
-                  Clinical Hints
+                  Sugestões Clínicas
                 </h2>
               </div>
               <p className="text-xs text-stone-400 ml-6">
-                Live suggestions as the visit unfolds
+                Sugestões em tempo real durante a consulta
               </p>
             </div>
 
             <div className="flex flex-col gap-3">
               {suggestions.length === 0 ? (
                 <p className="text-xs text-stone-400 italic">
-                  Suggestions will appear as the conversation progresses.
+                  As sugestões aparecerão à medida que a conversa avança.
                 </p>
               ) : (
                 suggestions.map((suggestion) => (
@@ -1739,7 +1918,7 @@ function DoctorMeetingRoom({
           </div>
 
           <button className="w-full py-3 px-4 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors text-left shrink-0 cursor-pointer">
-            View draft summary (73% complete)
+            Ver rascunho do resumo (73% completo)
           </button>
         </div>
       </div>
@@ -1774,7 +1953,11 @@ function SuggestionCard({
       : 'bg-stone-50 border-stone-100';
 
   const iconClass = isFlag ? 'text-[#b5471b]' : 'text-orange-500';
-  const typeLabel = suggestion.type[0].toUpperCase() + suggestion.type.slice(1);
+  const typeLabel =
+    suggestion.type === 'question' ? 'Pergunta' :
+    suggestion.type === 'action'   ? 'Ação'     :
+    suggestion.type === 'flag'     ? 'Alerta'   :
+    suggestion.type[0].toUpperCase() + suggestion.type.slice(1);
 
   return (
     <div
@@ -1809,7 +1992,7 @@ function SuggestionCard({
           className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors cursor-pointer"
         >
           <CheckIcon className="w-3 h-3" />
-          {done ? 'Undo' : 'Done'}
+          {done ? 'Desfazer' : 'Feito'}
         </button>
       </div>
     </div>
@@ -1857,7 +2040,7 @@ function PatientMeetingRoom({
 
   const doctorName = doctor
     ? `Dr. ${doctor.first_name} ${doctor.last_name}`
-    : 'Doctor';
+    : 'Médico/a';
 
   const isConnected = connState === 'connected';
 
@@ -1890,10 +2073,10 @@ function PatientMeetingRoom({
           />
           <span className="text-white/50 text-xs">
             {isConnected
-              ? `Connected · ${formatElapsed(elapsedSeconds)}`
+              ? `Ligado · ${formatElapsed(elapsedSeconds)}`
               : connState === 'waiting'
-                ? `Waiting for ${doctorName}…`
-                : 'Connecting…'}
+                ? `À espera de ${doctorName}…`
+                : 'A ligar…'}
           </span>
         </div>
       </div>
@@ -1901,7 +2084,7 @@ function PatientMeetingRoom({
       {/* Transcription notice */}
       <div className="relative z-10 flex justify-center mt-3">
         <p className="text-white/25 text-xs italic">
-          This visit is being securely transcribed.
+          Esta consulta está a ser transcrita de forma segura.
         </p>
       </div>
 
@@ -1926,7 +2109,7 @@ function PatientMeetingRoom({
         <div className="flex items-center gap-3 bg-black/25 backdrop-blur-xl rounded-full px-5 py-3 border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.4)]">
           <button
             onClick={onToggleMute}
-            aria-label={muted ? 'Unmute' : 'Mute'}
+            aria-label={muted ? 'Ativar microfone' : 'Silenciar'}
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
               muted
                 ? 'bg-[#b5471b] text-white'
@@ -1941,7 +2124,7 @@ function PatientMeetingRoom({
           </button>
           <button
             onClick={onToggleVideo}
-            aria-label={videoOff ? 'Turn camera on' : 'Turn camera off'}
+            aria-label={videoOff ? 'Ligar câmara' : 'Desligar câmara'}
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
               videoOff
                 ? 'bg-[#b5471b] text-white'
@@ -1956,7 +2139,7 @@ function PatientMeetingRoom({
           </button>
           <button
             onClick={onEndCall}
-            aria-label="Leave"
+            aria-label="Sair"
             className="w-11 h-11 rounded-full bg-[#b5471b] hover:opacity-90 flex items-center justify-center text-white transition-opacity cursor-pointer"
           >
             <PhoneOff className="w-5 h-5" />
@@ -1999,18 +2182,18 @@ function PatientPreMeetingView({
   }, [meeting]);
 
   const start = new Date(`${meeting.date}T${meeting.time}`);
-  const dateStr = start.toLocaleDateString([], {
+  const dateStr = start.toLocaleDateString('pt-PT', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
   });
-  const timeStr = start.toLocaleTimeString([], {
+  const timeStr = start.toLocaleTimeString('pt-PT', {
     hour: '2-digit',
     minute: '2-digit',
   });
   const doctorName = meeting.doctor
     ? `Dr. ${meeting.doctor.first_name} ${meeting.doctor.last_name}`
-    : 'Your Doctor';
+    : 'O seu médico/a';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2029,7 +2212,7 @@ function PatientPreMeetingView({
       );
       setSubmitted(true);
     } catch {
-      setSubmitError('Failed to save your information. Please try again.');
+      setSubmitError('Não foi possível guardar as suas informações. Por favor, tente novamente.');
     } finally {
       setSubmitting(false);
     }
@@ -2042,11 +2225,11 @@ function PatientPreMeetingView({
         <div className="flex items-center gap-2">
           <span className="font-semibold text-white text-sm">Cura</span>
           <span className="w-2 h-2 rounded-full bg-orange-400" />
-          <span className="text-white/70 text-xs">Appointment scheduled</span>
+          <span className="text-white/70 text-xs">Consulta agendada</span>
         </div>
         {timeUntil && (
           <span className="text-white/60 text-xs tabular-nums">
-            in {timeUntil}
+            em {timeUntil}
           </span>
         )}
       </div>
@@ -2075,10 +2258,10 @@ function PatientPreMeetingView({
               <CheckIcon className="w-6 h-6 text-green-400" />
             </div>
             <p className="font-semibold text-white">
-              Information sent to your doctor
+              Informação enviada ao médico/a
             </p>
             <p className="text-white/50 text-sm">
-              This page will open automatically when your appointment begins.
+              Esta página abrirá automaticamente quando a sua consulta começar.
             </p>
           </div>
         ) : (
@@ -2088,22 +2271,22 @@ function PatientPreMeetingView({
           >
             <div>
               <p className="text-xs font-semibold tracking-widest text-white/40 uppercase mb-1">
-                Before your visit
+                Antes da consulta
               </p>
               <p className="text-white/60 text-sm">
-                Help your doctor prepare by sharing a few details.
+                Ajude o seu médico/a a preparar-se partilhando alguns detalhes.
               </p>
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-white/80">
-                Reason for visit <span className="text-orange-400">*</span>
+                Motivo da consulta <span className="text-orange-400">*</span>
               </label>
               <input
                 type="text"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="e.g. Annual check-up, follow-up on blood pressure"
+                placeholder="ex: Consulta de rotina, acompanhamento de tensão arterial"
                 maxLength={500}
                 required
                 className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-transparent"
@@ -2112,12 +2295,12 @@ function PatientPreMeetingView({
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-white/80">
-                Symptoms
+                Sintomas
               </label>
               <textarea
                 value={symptoms}
                 onChange={(e) => setSymptoms(e.target.value)}
-                placeholder="Describe any symptoms you're experiencing"
+                placeholder="Descreva os sintomas que está a sentir"
                 maxLength={1000}
                 rows={3}
                 className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-transparent resize-none"
@@ -2126,12 +2309,12 @@ function PatientPreMeetingView({
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-white/80">
-                Additional notes
+                Notas adicionais
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Medications, allergies, or anything else your doctor should know"
+                placeholder="Medicação, alergias, ou qualquer outra informação relevante"
                 maxLength={1000}
                 rows={3}
                 className="w-full px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500/60 focus:border-transparent resize-none"
@@ -2147,7 +2330,7 @@ function PatientPreMeetingView({
               disabled={submitting || !reason.trim()}
               className="w-full py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full text-sm font-semibold transition-colors"
             >
-              {submitting ? 'Saving…' : 'Send to doctor'}
+              {submitting ? 'A guardar…' : 'Enviar ao médico/a'}
             </button>
           </form>
         )}
@@ -2181,13 +2364,23 @@ function PatientPostMeetingView({
   const isCanceled = meeting.status === "canceled" || meeting.status === "rejected";
   const doctorName = meeting.doctor
     ? `Dr. ${meeting.doctor.first_name} ${meeting.doctor.last_name}`
-    : "Your Doctor";
+    : 'O seu médico/a';
 
   const start = new Date(`${meeting.date}T${meeting.time}`);
-  const dateStr = start.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
-  const timeStr = start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dateStr = start.toLocaleDateString('pt-PT', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const timeStr = start.toLocaleTimeString('pt-PT', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
   const endTime = new Date(start.getTime() + meeting.duration * 60_000);
-  const endTimeStr = endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const endTimeStr = endTime.toLocaleTimeString('pt-PT', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   const note = meeting.soap_note_submitted ? meeting.soap_note : null;
   const chiefComplaint = meeting.patient_intake?.reason ?? null;
@@ -2199,18 +2392,30 @@ function PatientPostMeetingView({
           <div className="flex items-center gap-2 flex-1">
             <span className="font-semibold text-white text-sm">Cura</span>
             <span className="w-2 h-2 rounded-full bg-stone-500" />
-            <span className="text-white/70 text-xs">Appointment canceled</span>
+            <span className="text-white/70 text-xs">Consulta cancelada</span>
           </div>
-          <button onClick={onBack} className="text-white/50 hover:text-white text-xs transition-colors">Back to appointments</button>
+          <button
+            onClick={onBack}
+            className="text-white/50 hover:text-white text-xs transition-colors"
+          >
+            Voltar às consultas
+          </button>
         </div>
         <div className="flex flex-col items-center gap-5 max-w-lg w-full mx-auto px-6 py-10 text-center">
           <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
             <PhoneOffIcon className="w-8 h-8 text-white/50" />
           </div>
-          <p className="text-xl font-semibold text-white">Appointment canceled</p>
-          <p className="text-white/50 text-sm">This appointment was canceled.</p>
-          <button onClick={onBack} className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors mt-2">
-            Back to appointments
+          <p className="text-xl font-semibold text-white">
+            Consulta cancelada
+          </p>
+          <p className="text-white/50 text-sm">
+            Esta consulta foi cancelada.
+          </p>
+          <button
+            onClick={onBack}
+            className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors mt-2"
+          >
+            Voltar às consultas
           </button>
         </div>
       </div>
@@ -2224,24 +2429,36 @@ function PatientPostMeetingView({
           <div className="flex items-center gap-2 flex-1">
             <span className="font-semibold text-white text-sm">Cura</span>
             <span className="w-2 h-2 rounded-full bg-green-400" />
-            <span className="text-white/70 text-xs">Visit complete</span>
+            <span className="text-white/70 text-xs">Consulta concluída</span>
           </div>
-          <button onClick={onBack} className="text-white/50 hover:text-white text-xs transition-colors">Back to appointments</button>
+          <button
+            onClick={onBack}
+            className="text-white/50 hover:text-white text-xs transition-colors"
+          >
+            Voltar às consultas
+          </button>
         </div>
         <div className="flex flex-col items-center gap-5 max-w-lg w-full mx-auto px-6 py-10 text-center">
           <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
             <CheckIcon className="w-8 h-8 text-green-400" />
           </div>
-          <p className="text-xl font-semibold text-white">Visit complete</p>
-          <p className="text-white/50 text-sm">Your visit with {doctorName} has ended.</p>
+          <p className="text-xl font-semibold text-white">Consulta concluída</p>
+          <p className="text-white/50 text-sm">
+            A sua consulta com {doctorName} terminou.
+          </p>
           <div className="bg-black/40 backdrop-blur-sm rounded-2xl border border-white/10 px-6 py-5 w-full text-center">
             <p className="text-sm text-white/50">
-              Your visit summary will appear here once {doctorName} submits their notes.
+              O resumo da sua consulta aparecerá aqui assim que {doctorName} submeter as notas.
             </p>
-            <p className="text-xs text-white/30 mt-2">This page checks for updates automatically.</p>
+            <p className="text-xs text-white/30 mt-2">
+              Esta página verifica atualizações automaticamente.
+            </p>
           </div>
-          <button onClick={onBack} className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors">
-            Back to appointments
+          <button
+            onClick={onBack}
+            className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-full text-sm font-semibold transition-colors"
+          >
+            Voltar às consultas
           </button>
         </div>
       </div>
@@ -2264,14 +2481,16 @@ function PatientPostMeetingView({
       <header className="sticky top-0 z-10 bg-white border-b border-stone-200">
         <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
           <div>
-            <h1 className="text-base font-semibold text-stone-900">Visit Summary</h1>
+            <h1 className="text-base font-semibold text-stone-900">
+              Resumo da Consulta
+            </h1>
             <p className="text-xs text-stone-400">{dateStr}</p>
           </div>
           <button
             onClick={onBack}
             className="px-4 py-1.5 text-sm font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-full transition-colors"
           >
-            Back to appointments
+            Voltar às consultas
           </button>
         </div>
       </header>
@@ -2285,23 +2504,31 @@ function PatientPostMeetingView({
             </div>
             <div>
               <p className="font-semibold text-stone-900">{doctorName}</p>
-              <p className="text-xs text-stone-400 mt-0.5">Physician</p>
+              <p className="text-xs text-stone-400 mt-0.5">Médico/a</p>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-stone-100 grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Date &amp; Time</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
+                Data e Hora
+              </p>
               <p className="font-medium text-stone-900">{dateStr}</p>
               <p className="text-xs text-stone-400">{timeStr} – {endTimeStr}</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Duration</p>
-              <p className="font-medium text-stone-900">{meeting.duration} minutes</p>
-              <p className="text-xs text-stone-400">Telemedicine Visit</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
+                Duração
+              </p>
+              <p className="font-medium text-stone-900">
+                {meeting.duration} minutos
+              </p>
+              <p className="text-xs text-stone-400">Consulta por Telemedicina</p>
             </div>
             {chiefComplaint && (
               <div className="col-span-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Chief Complaint</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
+                  Queixa Principal
+                </p>
                 <p className="text-stone-700">{chiefComplaint}</p>
               </div>
             )}
@@ -2310,30 +2537,50 @@ function PatientPostMeetingView({
 
         {/* Vitals */}
         {hasVitals && (
-          <SummarySection icon={<HeartPulseIcon className="w-4 h-4" />} title="Vitals Recorded" defaultOpen>
+          <SummarySection
+            icon={<HeartPulseIcon className="w-4 h-4" />}
+            title="Sinais Vitais Registados"
+            defaultOpen
+          >
             <div className="grid grid-cols-2 gap-px bg-stone-100 rounded-xl overflow-hidden border border-stone-100">
               {note.vitals!.blood_pressure && (
                 <div className="bg-white px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Blood Pressure</p>
-                  <p className="text-lg font-bold text-stone-900">{note.vitals!.blood_pressure}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
+                    Pressão Arterial
+                  </p>
+                  <p className="text-lg font-bold text-stone-900">
+                    {note.vitals!.blood_pressure}
+                  </p>
                 </div>
               )}
               {note.vitals!.heart_rate && (
                 <div className="bg-white px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Heart Rate</p>
-                  <p className="text-lg font-bold text-stone-900">{note.vitals!.heart_rate}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
+                    Frequência Cardíaca
+                  </p>
+                  <p className="text-lg font-bold text-stone-900">
+                    {note.vitals!.heart_rate}
+                  </p>
                 </div>
               )}
               {note.vitals!.temperature && (
                 <div className="bg-white px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Temperature</p>
-                  <p className="text-lg font-bold text-stone-900">{note.vitals!.temperature}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
+                    Temperatura
+                  </p>
+                  <p className="text-lg font-bold text-stone-900">
+                    {note.vitals!.temperature}
+                  </p>
                 </div>
               )}
               {note.vitals!.weight && (
                 <div className="bg-white px-4 py-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Weight</p>
-                  <p className="text-lg font-bold text-stone-900">{note.vitals!.weight}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">
+                    Peso
+                  </p>
+                  <p className="text-lg font-bold text-stone-900">
+                    {note.vitals!.weight}
+                  </p>
                 </div>
               )}
             </div>
@@ -2344,8 +2591,8 @@ function PatientPostMeetingView({
         {diagnoses.length > 0 && (
           <SummarySection
             icon={<StethoscopeIcon className="w-4 h-4" />}
-            title="Diagnosis"
-            badge={`${diagnoses.length} condition${diagnoses.length === 1 ? "" : "s"}`}
+            title="Diagnóstico"
+            badge={`${diagnoses.length} ${diagnoses.length === 1 ? 'condição' : 'condições'}`}
             defaultOpen
           >
             <div className="space-y-0 divide-y divide-stone-100">
@@ -2355,12 +2602,14 @@ function PatientPostMeetingView({
                     <p className="text-sm font-medium text-stone-900">{d.condition}</p>
                     {d.icd_code && <p className="text-xs text-stone-400 mt-0.5">ICD-10: {d.icd_code}</p>}
                   </div>
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ml-3 ${
-                    d.type === "primary"
-                      ? "bg-blue-100 text-blue-700"
-                      : "bg-stone-100 text-stone-600"
-                  }`}>
-                    {d.type === "primary" ? "Primary" : "Secondary"}
+                  <span
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ml-3 ${
+                      d.type === 'primary'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {d.type === 'primary' ? 'Principal' : 'Secundário'}
                   </span>
                 </div>
               ))}
@@ -2370,8 +2619,14 @@ function PatientPostMeetingView({
 
         {/* Clinical Assessment */}
         {clinical_assessment && (
-          <SummarySection icon={<ClipboardIcon className="w-4 h-4" />} title="Clinical Assessment" defaultOpen={false}>
-            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{clinical_assessment}</p>
+          <SummarySection
+            icon={<ClipboardIcon className="w-4 h-4" />}
+            title="Avaliação Clínica"
+            defaultOpen={false}
+          >
+            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">
+              {clinical_assessment}
+            </p>
           </SummarySection>
         )}
 
@@ -2379,8 +2634,8 @@ function PatientPostMeetingView({
         {treatment_plan.length > 0 && (
           <SummarySection
             icon={<ClipboardCheckIcon className="w-4 h-4" />}
-            title="Treatment Plan"
-            badge={`${treatment_plan.length} item${treatment_plan.length === 1 ? "" : "s"}`}
+            title="Plano de Tratamento"
+            badge={`${treatment_plan.length} ${treatment_plan.length === 1 ? 'item' : 'itens'}`}
             defaultOpen
           >
             <ul className="space-y-2.5">
@@ -2400,8 +2655,8 @@ function PatientPostMeetingView({
         {prescriptions.length > 0 && (
           <SummarySection
             icon={<PillIcon className="w-4 h-4" />}
-            title="Prescriptions"
-            badge={`${prescriptions.length} new`}
+            title="Prescrições"
+            badge={`${prescriptions.length} nova${prescriptions.length === 1 ? '' : 's'}`}
             defaultOpen
           >
             <div className="space-y-3">
@@ -2414,12 +2669,12 @@ function PatientPostMeetingView({
                     </div>
                     <div className="text-right text-xs text-stone-400 shrink-0">
                       {rx.quantity && <p>{rx.quantity}</p>}
-                      {rx.refills && <p>{rx.refills} refills</p>}
+                      {rx.refills && <p>{rx.refills} recargas</p>}
                     </div>
                   </div>
                   {rx.instructions && (
                     <p className="text-xs text-stone-500 mt-2 leading-relaxed border-t border-stone-100 pt-2">
-                      Instructions: {rx.instructions}
+                      Instruções: {rx.instructions}
                     </p>
                   )}
                 </div>
@@ -2432,8 +2687,8 @@ function PatientPostMeetingView({
         {lab_orders.length > 0 && (
           <SummarySection
             icon={<FlaskIcon className="w-4 h-4" />}
-            title="Lab Orders"
-            badge={`${lab_orders.length} order${lab_orders.length === 1 ? "" : "s"}`}
+            title="Análises Laboratoriais"
+            badge={`${lab_orders.length} ${lab_orders.length === 1 ? 'pedido' : 'pedidos'}`}
             defaultOpen={false}
           >
             <ul className="space-y-2">
@@ -2449,7 +2704,11 @@ function PatientPostMeetingView({
 
         {/* Follow-Up Appointment */}
         {follow_up_appointment && (
-          <SummarySection icon={<CalendarIcon className="w-4 h-4" />} title="Follow-Up Appointment" defaultOpen={false}>
+          <SummarySection
+            icon={<CalendarIcon className="w-4 h-4" />}
+            title="Consulta de Seguimento"
+            defaultOpen={false}
+          >
             <p className="text-sm text-stone-700">{follow_up_appointment}</p>
           </SummarySection>
         )}
@@ -2459,9 +2718,13 @@ function PatientPostMeetingView({
           <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangleIcon className="w-5 h-5 text-red-500 shrink-0" />
-              <h2 className="font-semibold text-stone-900">When to Seek Immediate Care</h2>
+              <h2 className="font-semibold text-stone-900">
+                Quando Procurar Cuidados Imediatos
+              </h2>
             </div>
-            <p className="text-xs text-stone-500 mb-3 ml-7">Contact your doctor or go to the ER if you experience:</p>
+            <p className="text-xs text-stone-500 mb-3 ml-7">
+              Contacte o seu médico/a ou dirija-se ao serviço de urgência se sentir:
+            </p>
             <ul className="space-y-2 ml-7">
               {when_to_seek_care.map((item, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-stone-700">
@@ -2471,7 +2734,7 @@ function PatientPostMeetingView({
               ))}
             </ul>
             <p className="text-xs font-semibold text-red-600 mt-3 ml-7">
-              Emergency: Call 911 or go to your nearest emergency room.
+              Urgência: Ligue 112 ou dirija-se à urgência mais próxima.
             </p>
           </div>
         )}
@@ -2479,17 +2742,17 @@ function PatientPostMeetingView({
         {/* Footer */}
         <div className="bg-stone-100 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <p className="text-xs text-stone-500 leading-relaxed">
-            Questions about your visit? Message {doctorName} through the patient portal.
+            Tem dúvidas sobre a sua consulta? Contacte {doctorName} através do portal do doente.
           </p>
           <div className="flex gap-2 shrink-0">
             <button
               onClick={onBack}
               className="px-4 py-2 bg-white border border-stone-200 text-sm font-medium text-stone-700 rounded-full hover:bg-stone-50 transition-colors"
             >
-              Back to Home
+              Voltar ao início
             </button>
             <button className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-sm font-medium text-white rounded-full transition-colors">
-              Contact Office
+              Contactar consultório
             </button>
           </div>
         </div>
@@ -2555,12 +2818,12 @@ function Tile({
       {children}
       {(videoOff || waiting) && (
         <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm pointer-events-none">
-          {waiting ? 'Waiting…' : 'Camera off'}
+          {waiting ? 'À espera…' : 'Câmara desligada'}
         </div>
       )}
       <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/60 text-xs">
         {label}
-        {muted && <span className="ml-2 text-red-400">muted</span>}
+        {muted && <span className="ml-2 text-red-400">em silêncio</span>}
       </div>
     </div>
   );

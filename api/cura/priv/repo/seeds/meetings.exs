@@ -7,20 +7,21 @@ defmodule Cura.Repo.Seeds.Meetings do
 
   @durations [15, 30, 45, 60, 90, 120]
   @titles [
-    "Initial Consultation",
-    "Follow-up Visit",
-    "Wellness Check",
-    "Treatment Review",
-    "Therapy Session",
-    "Progress Update"
-  ]
-  @notes [
-    "Bring previous test results if available.",
-    "Patient requested a morning appointment.",
-    "Reminder: discuss medication adherence.",
-    "Check vitals and update care plan.",
-    "Review lab results and next steps.",
-    "General follow-up and Q&A."
+    "Consulta Inicial",
+    "Consulta de Seguimento",
+    "Avaliação de Bem-Estar",
+    "Revisão de Tratamento",
+    "Sessão de Terapia",
+    "Atualização de Progresso"
+    ]
+
+    @notes [
+    "Trazer resultados de exames anteriores, se disponíveis.",
+    "O paciente solicitou uma consulta de manhã.",
+    "Lembrete: discutir a adesão à medicação.",
+    "Verificar sinais vitais e atualizar o plano de cuidados.",
+    "Rever resultados laboratoriais e próximos passos.",
+    "Seguimento geral e sessão de perguntas e respostas."
   ]
 
   def run do

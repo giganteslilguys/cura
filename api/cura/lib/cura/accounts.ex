@@ -94,6 +94,8 @@ defmodule Cura.Accounts do
   def delete_user_session_token(_), do: :ok
 
   def list_doctors do
-    Repo.all(from u in User, where: u.role == :doctor, order_by: [asc: u.last_name, asc: u.first_name])
+    Repo.all(
+      from u in User, where: u.role == :doctor, order_by: [asc: u.last_name, asc: u.first_name]
+    )
   end
 end

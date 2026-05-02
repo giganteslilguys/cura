@@ -27,9 +27,9 @@ export function SummaryView({
 
   const start      = new Date(`${meeting.date}T${meeting.time}`);
   const end        = new Date(start.getTime() + meeting.duration * 60_000);
-  const dateStr    = start.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const timeStr    = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const endTimeStr = end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateStr    = start.toLocaleDateString('pt-PT', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const timeStr    = start.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+  const endTimeStr = end.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
   const doctorName = doctor ? `Dr. ${doctor.first_name} ${doctor.last_name}` : 'Your Doctor';
   const chiefComplaint = meeting.patient_intake?.reason ?? null;
 
@@ -48,14 +48,14 @@ export function SummaryView({
       <header className="sticky top-0 z-10 bg-white border-b border-stone-200">
         <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
           <div>
-            <h1 className="text-base font-semibold text-stone-900">Visit Summary</h1>
+            <h1 className="text-base font-semibold text-stone-900">Resumo da Consulta</h1>
             <p className="text-xs text-stone-400">{dateStr}</p>
           </div>
           <Link
             href="/meetings"
             className="px-4 py-1.5 text-sm font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-full transition-colors"
           >
-            Back to visits
+            Voltar às consultas
           </Link>
         </div>
       </header>
@@ -70,23 +70,23 @@ export function SummaryView({
             </div>
             <div>
               <p className="font-semibold text-stone-900">{doctorName}</p>
-              <p className="text-xs text-stone-400 mt-0.5">Physician</p>
+              <p className="text-xs text-stone-400 mt-0.5">Médico/a</p>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-stone-100 grid grid-cols-2 gap-4 text-sm">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Date &amp; Time</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Data e Hora</p>
               <p className="font-medium text-stone-900">{dateStr}</p>
               <p className="text-xs text-stone-400">{timeStr} – {endTimeStr}</p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Duration</p>
-              <p className="font-medium text-stone-900">{meeting.duration} minutes</p>
-              <p className="text-xs text-stone-400">Telemedicine Visit</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Duração</p>
+              <p className="font-medium text-stone-900">{meeting.duration} minutos</p>
+              <p className="text-xs text-stone-400">Consulta por Telemedicina</p>
             </div>
             {chiefComplaint && (
               <div className="col-span-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Chief Complaint</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-stone-400 mb-1">Queixa Principal</p>
                 <p className="text-stone-700">{chiefComplaint}</p>
               </div>
             )}
@@ -95,12 +95,12 @@ export function SummaryView({
 
         {/* Vitals */}
         {hasVitals && (
-          <Section icon={<HeartPulse className="w-4 h-4" />} title="Vitals Recorded" defaultOpen>
+          <Section icon={<HeartPulse className="w-4 h-4" />} title="Sinais Vitais Registados" defaultOpen>
             <div className="grid grid-cols-2 gap-px bg-stone-100 rounded-xl overflow-hidden border border-stone-100">
-              {soap.vitals!.blood_pressure && <Vital label="Blood Pressure" value={soap.vitals!.blood_pressure} />}
-              {soap.vitals!.heart_rate     && <Vital label="Heart Rate"     value={soap.vitals!.heart_rate} />}
-              {soap.vitals!.temperature    && <Vital label="Temperature"    value={soap.vitals!.temperature} />}
-              {soap.vitals!.weight         && <Vital label="Weight"         value={soap.vitals!.weight} />}
+              {soap.vitals!.blood_pressure && <Vital label="Pressão Arterial"      value={soap.vitals!.blood_pressure} />}
+              {soap.vitals!.heart_rate     && <Vital label="Frequência Cardíaca"   value={soap.vitals!.heart_rate} />}
+              {soap.vitals!.temperature    && <Vital label="Temperatura"           value={soap.vitals!.temperature} />}
+              {soap.vitals!.weight         && <Vital label="Peso"                  value={soap.vitals!.weight} />}
             </div>
           </Section>
         )}
@@ -109,8 +109,8 @@ export function SummaryView({
         {diagnoses.length > 0 && (
           <Section
             icon={<Stethoscope className="w-4 h-4" />}
-            title="Diagnosis"
-            badge={`${diagnoses.length} condition${diagnoses.length === 1 ? '' : 's'}`}
+            title="Diagnóstico"
+            badge={`${diagnoses.length} ${diagnoses.length === 1 ? 'condição' : 'condições'}`}
             defaultOpen
           >
             <div className="divide-y divide-stone-100">
@@ -123,7 +123,7 @@ export function SummaryView({
                   <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ml-3 ${
                     d.type === 'primary' ? 'bg-blue-100 text-blue-700' : 'bg-stone-100 text-stone-600'
                   }`}>
-                    {d.type === 'primary' ? 'Primary' : 'Secondary'}
+                    {d.type === 'primary' ? 'Principal' : 'Secundário'}
                   </span>
                 </div>
               ))}
@@ -133,7 +133,7 @@ export function SummaryView({
 
         {/* Clinical Assessment */}
         {assessment && (
-          <Section icon={<ClipboardList className="w-4 h-4" />} title="Clinical Assessment" defaultOpen={false}>
+          <Section icon={<ClipboardList className="w-4 h-4" />} title="Avaliação Clínica" defaultOpen={false}>
             <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{assessment}</p>
           </Section>
         )}
@@ -142,8 +142,8 @@ export function SummaryView({
         {treatment_plan.length > 0 && (
           <Section
             icon={<ClipboardCheck className="w-4 h-4" />}
-            title="Treatment Plan"
-            badge={`${treatment_plan.length} item${treatment_plan.length === 1 ? '' : 's'}`}
+            title="Plano de Tratamento"
+            badge={`${treatment_plan.length} ${treatment_plan.length === 1 ? 'item' : 'itens'}`}
             defaultOpen
           >
             <ul className="space-y-2.5">
@@ -163,8 +163,8 @@ export function SummaryView({
         {prescriptions.length > 0 && (
           <Section
             icon={<Pill className="w-4 h-4" />}
-            title="Prescriptions"
-            badge={`${prescriptions.length} new`}
+            title="Prescrições"
+            badge={`${prescriptions.length} nova${prescriptions.length === 1 ? '' : 's'}`}
             defaultOpen
           >
             <div className="space-y-3">
@@ -177,12 +177,12 @@ export function SummaryView({
                     </div>
                     <div className="text-right text-xs text-stone-400 shrink-0">
                       {rx.quantity && <p>{rx.quantity}</p>}
-                      {rx.refills  && <p>{rx.refills} refills</p>}
+                      {rx.refills  && <p>{rx.refills} recargas</p>}
                     </div>
                   </div>
                   {rx.instructions && (
                     <p className="text-xs text-stone-500 mt-2 leading-relaxed border-t border-stone-100 pt-2">
-                      Instructions: {rx.instructions}
+                      Instruções: {rx.instructions}
                     </p>
                   )}
                 </div>
@@ -195,8 +195,8 @@ export function SummaryView({
         {lab_orders.length > 0 && (
           <Section
             icon={<FlaskConical className="w-4 h-4" />}
-            title="Lab Orders"
-            badge={`${lab_orders.length} order${lab_orders.length === 1 ? '' : 's'}`}
+            title="Análises Laboratoriais"
+            badge={`${lab_orders.length} ${lab_orders.length === 1 ? 'pedido' : 'pedidos'}`}
             defaultOpen={false}
           >
             <ul className="space-y-2">
@@ -212,7 +212,7 @@ export function SummaryView({
 
         {/* Follow-Up */}
         {follow_up && (
-          <Section icon={<Calendar className="w-4 h-4" />} title="Follow-Up Appointment" defaultOpen={false}>
+          <Section icon={<Calendar className="w-4 h-4" />} title="Consulta de Seguimento" defaultOpen={false}>
             <p className="text-sm text-stone-700">{follow_up}</p>
           </Section>
         )}
@@ -222,9 +222,9 @@ export function SummaryView({
           <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-1">
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
-              <h2 className="font-semibold text-stone-900">When to Seek Immediate Care</h2>
+              <h2 className="font-semibold text-stone-900">Quando Procurar Cuidados Imediatos</h2>
             </div>
-            <p className="text-xs text-stone-500 mb-3 ml-7">Contact your doctor or go to the ER if you experience:</p>
+            <p className="text-xs text-stone-500 mb-3 ml-7">Contacte o seu médico ou dirija-se ao serviço de urgência se sentir:</p>
             <ul className="space-y-2 ml-7">
               {when_to_seek.map((item: string, i: number) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-stone-700">
@@ -234,7 +234,7 @@ export function SummaryView({
               ))}
             </ul>
             <p className="text-xs font-semibold text-red-600 mt-3 ml-7">
-              Emergency: Call 112 or go to your nearest emergency room.
+              Urgência: Ligue 112 ou dirija-se à urgência mais próxima.
             </p>
           </div>
         )}
@@ -242,22 +242,22 @@ export function SummaryView({
         {/* Footer */}
         <div className="bg-white rounded-2xl border border-stone-200 px-5 py-5 flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-stone-900">Have questions?</p>
-            <p className="text-xs text-stone-400 mt-0.5">Reach out to {doctorName} for any follow-up.</p>
+            <p className="text-sm font-medium text-stone-900">Tem dúvidas?</p>
+            <p className="text-xs text-stone-400 mt-0.5">Contacte {doctorName} para qualquer esclarecimento.</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
               href="/meetings"
               className="px-4 py-2 border border-stone-200 text-sm font-medium text-stone-600 rounded-full hover:bg-stone-50 transition-colors"
             >
-              Back to visits
+              Voltar às consultas
             </Link>
             <Link
               href="/book"
               className="px-4 py-2 text-sm font-medium text-white rounded-full hover:opacity-90 transition-opacity"
               style={{ background: '#b5471b' }}
             >
-              Contact doctor
+              Contactar médico/a
             </Link>
           </div>
         </div>

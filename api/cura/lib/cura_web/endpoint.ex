@@ -1,4 +1,4 @@
-  defmodule CuraWeb.Endpoint do
+defmodule CuraWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :cura
 
   # The session will be stored in the cookie and signed,

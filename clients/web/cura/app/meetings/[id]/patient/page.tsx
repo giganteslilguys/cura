@@ -57,7 +57,7 @@ export default async function PatientPage({
           className="inline-flex items-center gap-1.5 text-xs text-black/35 hover:text-[#b5471b] transition-colors mb-8"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to visits
+          Voltar às consultas
         </Link>
 
         {/* Header */}
@@ -74,7 +74,7 @@ export default async function PatientPage({
                 href={`/meetings/${id}`}
                 className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity shrink-0"
               >
-                Join visit <ArrowRight className="w-4 h-4" />
+                Entrar na consulta <ArrowRight className="w-4 h-4" />
               </Link>
             ) : null;
           })()}
@@ -82,11 +82,11 @@ export default async function PatientPage({
 
         <div className="flex flex-col gap-6">
           {/* Demographics */}
-          <Section title="Demographics" icon={<User className="w-4 h-4" />}>
+          <Section title="Dados pessoais" icon={<User className="w-4 h-4" />}>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <Stat label="Date of birth" value={profile?.date_of_birth ?? '—'} />
+              <Stat label="Data de nascimento" value={profile?.date_of_birth ?? '—'} />
               <Stat
-                label="Sex"
+                label="Sexo"
                 value={
                   profile?.sex
                     ? profile.sex.charAt(0).toUpperCase() + profile.sex.slice(1)
@@ -94,11 +94,11 @@ export default async function PatientPage({
                 }
               />
               <Stat
-                label="Weight"
+                label="Peso"
                 value={profile?.weight_kg ? `${profile.weight_kg} kg` : '—'}
               />
               <Stat
-                label="Height"
+                label="Altura"
                 value={profile?.height_cm ? `${profile.height_cm} cm` : '—'}
               />
             </div>
@@ -106,11 +106,11 @@ export default async function PatientPage({
 
           {/* Vitals */}
           {profile?.bmi != null && (
-            <Section title="Vitals" icon={<HeartPulse className="w-4 h-4" />}>
+            <Section title="Sinais vitais" icon={<HeartPulse className="w-4 h-4" />}>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <Stat label="BMI" value={profile.bmi.toFixed(1)} />
+                <Stat label="IMC" value={profile.bmi.toFixed(1)} />
                 <Stat
-                  label="BMI category"
+                  label="Categoria IMC"
                   value={bmiCategory(profile.bmi)}
                 />
               </div>
@@ -118,7 +118,7 @@ export default async function PatientPage({
           )}
 
           {/* Medications */}
-          <Section title="Medications" icon={<Pill className="w-4 h-4" />}>
+          <Section title="Medicação" icon={<Pill className="w-4 h-4" />}>
             {profile?.medications?.length ? (
               <ul className="flex flex-col gap-2">
                 {profile.medications.map((med, i) => (
@@ -126,13 +126,13 @@ export default async function PatientPage({
                 ))}
               </ul>
             ) : (
-              <Empty>No medications on record.</Empty>
+              <Empty>Sem medicação registada.</Empty>
             )}
           </Section>
 
           {/* Allergies */}
           <Section
-            title="Allergies"
+            title="Alergias"
             icon={<AlertTriangle className="w-4 h-4" />}
           >
             {profile?.allergies?.length ? (
@@ -142,13 +142,13 @@ export default async function PatientPage({
                 ))}
               </ul>
             ) : (
-              <Empty>No allergies on record.</Empty>
+              <Empty>Sem alergias registadas.</Empty>
             )}
           </Section>
 
           {/* Conditions */}
           <Section
-            title="Medical conditions"
+            title="Condições médicas"
             icon={<Activity className="w-4 h-4" />}
           >
             {profile?.conditions?.length ? (
@@ -168,13 +168,13 @@ export default async function PatientPage({
                 ))}
               </div>
             ) : (
-              <Empty>No conditions on record.</Empty>
+              <Empty>Sem condições registadas.</Empty>
             )}
           </Section>
 
           {/* Doctor notes */}
           <Section
-            title="My notes"
+            title="As minhas notas"
             icon={<NotebookPen className="w-4 h-4" />}
           >
             <NotesEditor
@@ -186,7 +186,7 @@ export default async function PatientPage({
 
           {/* Documents */}
           <Section
-            title="Documents"
+            title="Documentos"
             icon={<FolderOpen className="w-4 h-4" />}
           >
             <DocumentsPanel
@@ -198,21 +198,21 @@ export default async function PatientPage({
 
           {/* Pre-visit intake */}
           <Section
-            title="Pre-visit intake"
+            title="Informação pré-consulta"
             icon={<ClipboardList className="w-4 h-4" />}
           >
             {intake ? (
               <div className="flex flex-col gap-4">
-                <IntakeField label="Reason for visit" value={intake.reason} />
+                <IntakeField label="Motivo da consulta" value={intake.reason} />
                 {intake.symptoms && (
-                  <IntakeField label="Symptoms" value={intake.symptoms} />
+                  <IntakeField label="Sintomas" value={intake.symptoms} />
                 )}
                 {intake.notes && (
-                  <IntakeField label="Additional notes" value={intake.notes} />
+                  <IntakeField label="Notas adicionais" value={intake.notes} />
                 )}
               </div>
             ) : (
-              <Empty>Patient has not submitted pre-visit information yet.</Empty>
+              <Empty>O doente ainda não submeteu informação pré-consulta.</Empty>
             )}
           </Section>
         </div>
@@ -224,10 +224,10 @@ export default async function PatientPage({
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function bmiCategory(bmi: number): string {
-  if (bmi < 18.5) return 'Underweight';
+  if (bmi < 18.5) return 'Abaixo do peso';
   if (bmi < 25) return 'Normal';
-  if (bmi < 30) return 'Overweight';
-  return 'Obese';
+  if (bmi < 30) return 'Excesso de peso';
+  return 'Obesidade';
 }
 
 function Section({

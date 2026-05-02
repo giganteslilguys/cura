@@ -76,17 +76,22 @@ defmodule CuraWeb.Api.MeetingController do
     user = conn.assigns.current_user
 
     with true <- user.role == :doctor,
-         {:ok, meeting} <- Meetings.create_on_site_meeting(
-           user.id,
-           params["patient_email"],
-           params["title"]
-         ) do
+         {:ok, meeting} <-
+           Meetings.create_on_site_meeting(
+             user.id,
+             params["patient_email"],
+             params["title"]
+           ) do
       conn |> put_status(:created) |> render(:show, meeting: meeting)
     else
-      false -> {:error, :unauthorized}
+      false ->
+        {:error, :unauthorized}
+
       {:error, :patient_not_found} ->
         conn |> put_status(:not_found) |> json(%{error: "No patient found with that email."})
-      error -> error
+
+      error ->
+        error
     end
   end
 
@@ -99,10 +104,17 @@ defmodule CuraWeb.Api.MeetingController do
       json(conn, %{soap_note: note})
     else
       {:error, :parse_failed} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "Could not parse AI response."})
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "Could not parse AI response."})
+
       {:error, :openai_error} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "AI service unavailable. Please try again."})
-      other -> other
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "AI service unavailable. Please try again."})
+
+      other ->
+        other
     end
   end
 

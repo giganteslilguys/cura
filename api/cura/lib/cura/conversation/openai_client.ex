@@ -267,7 +267,12 @@ defmodule Cura.Conversation.OpenAIClient do
     has_profile = is_struct(profile, PatientProfile)
 
     sex = if has_profile, do: profile.sex || "unknown", else: "unknown"
-    age = if has_profile && profile.date_of_birth, do: years_since(profile.date_of_birth), else: "unknown"
+
+    age =
+      if has_profile && profile.date_of_birth,
+        do: years_since(profile.date_of_birth),
+        else: "unknown"
+
     bmi = if has_profile, do: PatientProfile.bmi(profile) || "unknown", else: "unknown"
     height = if has_profile, do: profile.height_cm || "?", else: "?"
     weight = if has_profile, do: profile.weight_kg || "?", else: "?"

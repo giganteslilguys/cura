@@ -14,8 +14,7 @@ function todayStr() {
 
 function fmt(t: string) {
   const [h, m] = t.split(':');
-  const hour = parseInt(h);
-  return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+  return `${h.padStart(2, '0')}:${m}`;
 }
 
 type Slot =
@@ -56,7 +55,7 @@ export function BookingForm({
 
     req
       .then(setSlots)
-      .catch(() => setError('Could not load available times.'))
+      .catch(() => setError('Não foi possível carregar os horários disponíveis.'))
       .finally(() => setLoadingSlots(false));
   }, [doctorId, date, token]);
 
@@ -76,7 +75,7 @@ export function BookingForm({
       await bookSlot({ doctor_id: resolvedDoctorId, date, time, title: 'Appointment' }, token);
       router.push('/meetings');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not book. Please try again.');
+      setError(err instanceof ApiError ? err.message : 'Não foi possível marcar. Por favor, tente novamente.');
       setBooking(false);
     }
   };
@@ -95,14 +94,14 @@ export function BookingForm({
   return (
     <div className="flex flex-col gap-7">
       {/* Doctor */}
-      <Field label="Doctor">
+      <Field label="Médico/a">
         <select
           value={doctorId}
           onChange={(e) => setDoctorId(e.target.value)}
           className="w-full border-b border-black/10 py-2.5 bg-transparent text-sm text-black focus:outline-none focus:border-[#b5471b] transition-colors"
         >
-          <option value="">Select a doctor…</option>
-          <option value={ANY_DOCTOR}>Any available doctor</option>
+          <option value="">Selecione um médico/a…</option>
+          <option value={ANY_DOCTOR}>Qualquer médico/a disponível</option>
           {doctors.map((d) => (
             <option key={d.id} value={d.id}>
               Dr. {d.first_name} {d.last_name}
@@ -112,7 +111,7 @@ export function BookingForm({
       </Field>
 
       {/* Date */}
-      <Field label="Day">
+      <Field label="Dia">
         <input
           type="date"
           value={date}
@@ -123,9 +122,9 @@ export function BookingForm({
       </Field>
 
       {/* Time */}
-      <Field label="Time">
+      <Field label="Hora">
         {loadingSlots ? (
-          <p className="py-2.5 text-sm text-black/30 animate-pulse">Loading…</p>
+          <p className="py-2.5 text-sm text-black/30 animate-pulse">A carregar…</p>
         ) : (
           <select
             value={time}
@@ -136,9 +135,9 @@ export function BookingForm({
             <option value="">
               {slots.length === 0
                 ? doctorId
-                  ? 'No slots available on this day'
-                  : 'Select a doctor first'
-                : 'Select a time…'}
+                  ? 'Sem horários disponíveis neste dia'
+                  : 'Selecione primeiro um médico/a'
+                : 'Selecione uma hora…'}
             </option>
             {slots.map((s, i) => (
               <option key={i} value={slotValue(s)}>
@@ -157,7 +156,7 @@ export function BookingForm({
         className="w-full rounded-full py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-30"
         style={{ background: '#b5471b' }}
       >
-        {booking ? 'Booking…' : 'Confirm appointment'}
+        {booking ? 'A marcar…' : 'Confirmar consulta'}
       </button>
     </div>
   );

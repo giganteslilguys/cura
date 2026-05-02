@@ -28,7 +28,7 @@ export function StartOnSite() {
         className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-black/10 hover:border-[#b5471b] hover:text-[#b5471b] text-sm font-medium text-black/60 transition-colors"
       >
         <Stethoscope className="w-4 h-4" />
-        Start on-site visit
+        Iniciar consulta presencial
       </button>
 
       <dialog
@@ -41,7 +41,7 @@ export function StartOnSite() {
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-stone-100">
           <div className="flex items-center gap-2">
             <Stethoscope className="w-4 h-4 text-[#b5471b]" />
-            <span className="text-sm font-semibold text-stone-900">Start an on-site visit</span>
+            <span className="text-sm font-semibold text-stone-900">Iniciar uma consulta presencial</span>
           </div>
           <button
             type="button"
@@ -54,12 +54,12 @@ export function StartOnSite() {
 
         <form action={formAction} className="flex flex-col gap-4 px-6 py-5">
           <p className="text-xs text-stone-500">
-            The patient is here in person — we&apos;ll record audio only and start
-            producing visit notes immediately.
+            O doente está presente em pessoa — vamos gravar apenas o áudio e começar
+            a produzir notas da consulta de imediato.
           </p>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-stone-600">Patient email</label>
+            <label className="text-xs font-medium text-stone-600">Email do doente</label>
             <input
               name="patient_email"
               type="email"
@@ -71,12 +71,12 @@ export function StartOnSite() {
 
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-stone-600">
-              Reason for visit <span className="text-stone-400 font-normal">(optional)</span>
+              Motivo da consulta <span className="text-stone-400 font-normal">(opcional)</span>
             </label>
             <input
               name="title"
               type="text"
-              placeholder="e.g. Follow-up, Annual check-up"
+              placeholder="ex. Consulta de acompanhamento, Consulta anual"
               maxLength={100}
               className="px-3 py-2 rounded-lg bg-stone-50 border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400/50"
             />
@@ -95,14 +95,14 @@ export function StartOnSite() {
               disabled={pending}
               className="px-4 py-2 text-sm text-stone-500 hover:text-stone-800 transition-colors disabled:opacity-50"
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="submit"
               disabled={pending}
               className="px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             >
-              {pending ? 'Starting…' : 'Start visit'}
+              {pending ? 'A iniciar…' : 'Iniciar consulta'}
             </button>
           </div>
         </form>

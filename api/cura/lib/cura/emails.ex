@@ -10,14 +10,14 @@ defmodule Cura.Emails do
   def send_booking_confirmations(meeting) do
     Task.start(fn ->
       if meeting.patient, do: Mailer.deliver(booking_patient(meeting))
-      if meeting.doctor,  do: Mailer.deliver(booking_doctor(meeting))
+      if meeting.doctor, do: Mailer.deliver(booking_doctor(meeting))
     end)
   end
 
   def send_reminders(meeting) do
     Task.start(fn ->
       if meeting.patient, do: Mailer.deliver(reminder(meeting, :patient))
-      if meeting.doctor,  do: Mailer.deliver(reminder(meeting, :doctor))
+      if meeting.doctor, do: Mailer.deliver(reminder(meeting, :doctor))
     end)
   end
 
@@ -31,107 +31,105 @@ defmodule Cura.Emails do
 
   defp booking_patient(meeting) do
     patient = meeting.patient
-    doctor  = meeting.doctor
+    doctor = meeting.doctor
 
     new()
     |> to({full_name(patient), patient.email})
     |> from(@from)
-    |> subject("Appointment confirmed — #{fmt_date(meeting.date)} with Dr. #{doctor.last_name}")
-    |> html_body(wrap("""
-      <h1 style="#{h1()}">Your appointment is confirmed</h1>
-      <p style="#{p()}">Hi #{patient.first_name}, your consultation has been scheduled.</p>
-      #{detail_table([
-        {"Doctor",   "Dr. #{full_name(doctor)}"},
-        {"Date",     fmt_date(meeting.date)},
-        {"Time",     fmt_time(meeting.time)},
-        {"Duration", "#{meeting.duration} minutes"}
-      ])}
-      <p style="#{p()} margin-top:24px;">Please complete your pre-visit intake before the appointment so your doctor can prepare.</p>
-      #{cta("Join your visit", "http://localhost:3000/meetings")}
-    """))
+    |> subject("Consulta confirmada — #{fmt_date(meeting.date)} com Dr. #{doctor.last_name}")
+    |> html_body(
+      wrap("""
+        <h1 style="#{h1()}">A sua consulta está confirmada</h1>
+        <p style="#{p()}">Olá #{patient.first_name}, a sua consulta foi agendada.</p>
+        #{detail_table([{"Médico/a", "Dr. #{full_name(doctor)}"}, {"Data", fmt_date(meeting.date)}, {"Hora", fmt_time(meeting.time)}, {"Duração", "#{meeting.duration} minutos"}])}
+        <p style="#{p()} margin-top:24px;">Por favor, preencha o formulário pré-consulta antes da consulta para que o seu médico/a possa preparar-se.</p>
+        #{cta("Entrar na consulta", "http://localhost:3000/meetings")}
+      """)
+    )
   end
 
   defp booking_doctor(meeting) do
-    doctor  = meeting.doctor
+    doctor = meeting.doctor
     patient = meeting.patient
 
     new()
     |> to({full_name(doctor), doctor.email})
     |> from(@from)
     |> subject("New appointment — #{fmt_date(meeting.date)} with #{full_name(patient)}")
-    |> html_body(wrap("""
-      <h1 style="#{h1()}">New appointment booked</h1>
-      <p style="#{p()}">Hi Dr. #{doctor.last_name}, a patient has scheduled a visit with you.</p>
-      #{detail_table([
-        {"Patient", full_name(patient)},
-        {"Date",    fmt_date(meeting.date)},
-        {"Time",    fmt_time(meeting.time)},
-        {"Duration","#{meeting.duration} minutes"}
-      ])}
-      #{cta("View patient details", "http://localhost:3000/meetings")}
-    """))
+    |> html_body(
+      wrap("""
+        <h1 style="#{h1()}">New appointment booked</h1>
+        <p style="#{p()}">Hi Dr. #{doctor.last_name}, a patient has scheduled a visit with you.</p>
+        #{detail_table([{"Patient", full_name(patient)}, {"Date", fmt_date(meeting.date)}, {"Time", fmt_time(meeting.time)}, {"Duration", "#{meeting.duration} minutes"}])}
+        #{cta("View patient details", "http://localhost:3000/meetings")}
+      """)
+    )
   end
 
   defp reminder(meeting, :patient) do
     patient = meeting.patient
-    doctor  = meeting.doctor
+    doctor = meeting.doctor
 
     new()
     |> to({full_name(patient), patient.email})
     |> from(@from)
-    |> subject("Reminder: appointment tomorrow at #{fmt_time(meeting.time)} with Dr. #{doctor.last_name}")
-    |> html_body(wrap("""
-      <h1 style="#{h1()}">Your appointment is tomorrow</h1>
-      <p style="#{p()}">Hi #{patient.first_name}, just a reminder about your upcoming visit.</p>
-      #{detail_table([
-        {"Doctor",   "Dr. #{full_name(doctor)}"},
-        {"Date",     fmt_date(meeting.date)},
-        {"Time",     fmt_time(meeting.time)}
-      ])}
-      #{cta("Join your visit", "http://localhost:3000/meetings")}
-    """))
+    |> subject(
+      "Reminder: appointment tomorrow at #{fmt_time(meeting.time)} with Dr. #{doctor.last_name}"
+    )
+    |> html_body(
+      wrap("""
+        <h1 style="#{h1()}">Your appointment is tomorrow</h1>
+        <p style="#{p()}">Hi #{patient.first_name}, just a reminder about your upcoming visit.</p>
+        #{detail_table([{"Doctor", "Dr. #{full_name(doctor)}"}, {"Date", fmt_date(meeting.date)}, {"Time", fmt_time(meeting.time)}])}
+        #{cta("Join your visit", "http://localhost:3000/meetings")}
+      """)
+    )
   end
 
   defp reminder(meeting, :doctor) do
-    doctor  = meeting.doctor
+    doctor = meeting.doctor
     patient = meeting.patient
 
     new()
     |> to({full_name(doctor), doctor.email})
     |> from(@from)
-    |> subject("Reminder: appointment tomorrow with #{full_name(patient)} at #{fmt_time(meeting.time)}")
-    |> html_body(wrap("""
-      <h1 style="#{h1()}">Appointment reminder</h1>
-      <p style="#{p()}">Hi Dr. #{doctor.last_name}, you have a consultation scheduled for tomorrow.</p>
-      #{detail_table([
-        {"Patient", full_name(patient)},
-        {"Date",    fmt_date(meeting.date)},
-        {"Time",    fmt_time(meeting.time)}
-      ])}
-      #{cta("View patient details", "http://localhost:3000/meetings")}
-    """))
+    |> subject(
+      "Reminder: appointment tomorrow with #{full_name(patient)} at #{fmt_time(meeting.time)}"
+    )
+    |> html_body(
+      wrap("""
+        <h1 style="#{h1()}">Appointment reminder</h1>
+        <p style="#{p()}">Hi Dr. #{doctor.last_name}, you have a consultation scheduled for tomorrow.</p>
+        #{detail_table([{"Patient", full_name(patient)}, {"Date", fmt_date(meeting.date)}, {"Time", fmt_time(meeting.time)}])}
+        #{cta("View patient details", "http://localhost:3000/meetings")}
+      """)
+    )
   end
 
   defp visit_summary(meeting) do
     patient = meeting.patient
-    doctor  = meeting.doctor
-    soap    = meeting.soap_note || %{}
+    doctor = meeting.doctor
+    soap = meeting.soap_note || %{}
 
-    diagnoses     = Map.get(soap, "diagnoses", [])
+    diagnoses = Map.get(soap, "diagnoses", [])
     prescriptions = Map.get(soap, "prescriptions", [])
-    treatment     = Map.get(soap, "treatment_plan", [])
-    follow_up     = Map.get(soap, "follow_up_appointment")
-    seek_care     = Map.get(soap, "when_to_seek_care", [])
-    assessment    = Map.get(soap, "clinical_assessment")
+    treatment = Map.get(soap, "treatment_plan", [])
+    follow_up = Map.get(soap, "follow_up_appointment")
+    seek_care = Map.get(soap, "when_to_seek_care", [])
+    assessment = Map.get(soap, "clinical_assessment")
 
     sections =
       [
         if(assessment, do: summary_section("Clinical Assessment", assessment_html(assessment))),
         if(diagnoses != [], do: summary_section("Diagnoses", diagnoses_html(diagnoses))),
         if(treatment != [], do: summary_section("Treatment Plan", checklist_html(treatment))),
-        if(prescriptions != [], do: summary_section("Prescriptions", prescriptions_html(prescriptions))),
+        if(prescriptions != [],
+          do: summary_section("Prescriptions", prescriptions_html(prescriptions))
+        ),
         if(follow_up, do: summary_section("Follow-up", follow_up_html(follow_up))),
-        if(seek_care != [], do: summary_section("When to Seek Immediate Care", seek_care_html(seek_care)))
+        if(seek_care != [],
+          do: summary_section("When to Seek Immediate Care", seek_care_html(seek_care))
+        )
       ]
       |> Enum.filter(& &1)
       |> Enum.join("\n")
@@ -249,33 +247,42 @@ defmodule Cura.Emails do
   end
 
   defp diagnoses_html(diagnoses) do
-    pills = Enum.map_join(diagnoses, " ", fn d ->
-      primary = d["type"] == "primary"
-      bg     = if primary, do: "rgba(181,71,27,0.07)", else: "rgba(0,0,0,0.04)"
-      color  = if primary, do: "#b5471b", else: "#666"
-      border = if primary, do: "rgba(181,71,27,0.18)", else: "rgba(0,0,0,0.1)"
-      code   = if d["icd_code"], do: " <span style='opacity:0.6;font-size:11px;'>#{d["icd_code"]}</span>", else: ""
-      """
-      <span style="display:inline-block;padding:5px 11px;border-radius:999px;font-size:13px;font-weight:500;
-                   background:#{bg};color:#{color};border:1px solid #{border};margin-bottom:6px;">
-        #{d["condition"]}#{code}
-      </span>
-      """
-    end)
+    pills =
+      Enum.map_join(diagnoses, " ", fn d ->
+        primary = d["type"] == "primary"
+        bg = if primary, do: "rgba(181,71,27,0.07)", else: "rgba(0,0,0,0.04)"
+        color = if primary, do: "#b5471b", else: "#666"
+        border = if primary, do: "rgba(181,71,27,0.18)", else: "rgba(0,0,0,0.1)"
+
+        code =
+          if d["icd_code"],
+            do: " <span style='opacity:0.6;font-size:11px;'>#{d["icd_code"]}</span>",
+            else: ""
+
+        """
+        <span style="display:inline-block;padding:5px 11px;border-radius:999px;font-size:13px;font-weight:500;
+                     background:#{bg};color:#{color};border:1px solid #{border};margin-bottom:6px;">
+          #{d["condition"]}#{code}
+        </span>
+        """
+      end)
+
     "<div>#{pills}</div>"
   end
 
   defp checklist_html(items) do
-    rows = Enum.map_join(items, "", fn item ->
-      """
-      <tr>
-        <td style="padding:5px 0;vertical-align:top;width:18px;">
-          <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#b5471b;margin-top:5px;"></span>
-        </td>
-        <td style="padding:5px 0;font-size:14px;color:#444;line-height:1.5;">#{item}</td>
-      </tr>
-      """
-    end)
+    rows =
+      Enum.map_join(items, "", fn item ->
+        """
+        <tr>
+          <td style="padding:5px 0;vertical-align:top;width:18px;">
+            <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#b5471b;margin-top:5px;"></span>
+          </td>
+          <td style="padding:5px 0;font-size:14px;color:#444;line-height:1.5;">#{item}</td>
+        </tr>
+        """
+      end)
+
     "<table cellpadding='0' cellspacing='0' style='width:100%;'>#{rows}</table>"
   end
 
@@ -283,18 +290,20 @@ defmodule Cura.Emails do
     Enum.map_join(prescriptions, "", fn rx ->
       details =
         [
-          if(rx["dosage"],       do: rx["dosage"]),
-          if(rx["quantity"],     do: "Qty: #{rx["quantity"]}"),
-          if(rx["refills"],      do: "Refills: #{rx["refills"]}"),
+          if(rx["dosage"], do: rx["dosage"]),
+          if(rx["quantity"], do: "Qty: #{rx["quantity"]}"),
+          if(rx["refills"], do: "Refills: #{rx["refills"]}"),
           if(rx["instructions"], do: rx["instructions"])
         ]
         |> Enum.filter(& &1)
 
       details_html =
         if details != [] do
-          items = Enum.map_join(details, "", fn d ->
-            "<span style='font-size:12px;color:#888;margin-right:10px;'>#{d}</span>"
-          end)
+          items =
+            Enum.map_join(details, "", fn d ->
+              "<span style='font-size:12px;color:#888;margin-right:10px;'>#{d}</span>"
+            end)
+
           "<div style='margin-top:4px;'>#{items}</div>"
         else
           ""
@@ -318,13 +327,15 @@ defmodule Cura.Emails do
   end
 
   defp seek_care_html(items) do
-    rows = Enum.map_join(items, "", fn item ->
-      """
-      <div style="padding:9px 13px;border-radius:8px;background:rgba(181,71,27,0.05);border:1px solid rgba(181,71,27,0.12);margin-bottom:6px;">
-        <p style="font-size:13px;color:#b5471b;margin:0;line-height:1.5;">#{item}</p>
-      </div>
-      """
-    end)
+    rows =
+      Enum.map_join(items, "", fn item ->
+        """
+        <div style="padding:9px 13px;border-radius:8px;background:rgba(181,71,27,0.05);border:1px solid rgba(181,71,27,0.12);margin-bottom:6px;">
+          <p style="font-size:13px;color:#b5471b;margin:0;line-height:1.5;">#{item}</p>
+        </div>
+        """
+      end)
+
     "<div>#{rows}</div>"
   end
 
@@ -366,14 +377,15 @@ defmodule Cura.Emails do
   end
 
   defp detail_table(rows) do
-    cells = Enum.map_join(rows, "", fn {label, value} ->
-      """
-      <tr>
-        <td style="padding:10px 16px;font-size:13px;color:#999;font-weight:500;white-space:nowrap;width:120px;">#{label}</td>
-        <td style="padding:10px 16px;font-size:14px;color:#111;font-weight:500;">#{value}</td>
-      </tr>
-      """
-    end)
+    cells =
+      Enum.map_join(rows, "", fn {label, value} ->
+        """
+        <tr>
+          <td style="padding:10px 16px;font-size:13px;color:#999;font-weight:500;white-space:nowrap;width:120px;">#{label}</td>
+          <td style="padding:10px 16px;font-size:14px;color:#111;font-weight:500;">#{value}</td>
+        </tr>
+        """
+      end)
 
     """
     <table cellpadding="0" cellspacing="0" style="width:100%;border-radius:10px;overflow:hidden;background:#faf9f7;border:1px solid #ece9e5;margin:20px 0;">
@@ -393,13 +405,14 @@ defmodule Cura.Emails do
   end
 
   defp h1, do: "font-size:22px;font-weight:700;color:#111;margin:0 0 12px;letter-spacing:-0.3px;"
-  defp p,  do: "font-size:14px;color:#555;line-height:1.6;margin:0 0 16px;"
+  defp p, do: "font-size:14px;color:#555;line-height:1.6;margin:0 0 16px;"
 
   # ── Format helpers ────────────────────────────────────────────────────────────
 
   defp full_name(user), do: "#{user.first_name} #{user.last_name}"
 
   defp fmt_date(%Date{} = d), do: Calendar.strftime(d, "%B %d, %Y")
+
   defp fmt_date(d) when is_binary(d) do
     case Date.from_iso8601(d) do
       {:ok, date} -> fmt_date(date)
@@ -414,6 +427,7 @@ defmodule Cura.Emails do
     period = if t.hour >= 12, do: "PM", else: "AM"
     "#{h12}:#{min} #{period}"
   end
+
   defp fmt_time(t) when is_binary(t) do
     case Time.from_iso8601(t) do
       {:ok, time} -> fmt_time(time)

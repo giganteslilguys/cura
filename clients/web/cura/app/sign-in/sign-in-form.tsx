@@ -34,7 +34,7 @@ export function SignInForm() {
 
       <label className="flex flex-col gap-2.5">
         <span className="text-xs font-medium text-black/40 uppercase tracking-widest flex items-center gap-1.5">
-          <Lock className="w-3.5 h-3.5" /> Password
+          <Lock className="w-3.5 h-3.5" /> Palavra-passe
         </span>
         <input
           name="password"
@@ -55,7 +55,7 @@ export function SignInForm() {
         className="w-full rounded-full bg-[#b5471b] text-white py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center justify-center gap-2"
       >
         <LogIn className="w-4 h-4" />
-        {pending ? 'Signing in…' : 'Sign in'}
+        {pending ? 'A entrar…' : 'Entrar'}
       </button>
     </form>
   );

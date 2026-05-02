@@ -28,12 +28,12 @@ export default async function BookPage() {
           className="inline-flex items-center gap-1.5 text-xs text-black/35 hover:text-[#b5471b] transition-colors mb-8"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to visits
+          Voltar às consultas
         </Link>
 
-        <h1 className="text-2xl font-semibold text-black mb-1">Book a visit</h1>
+        <h1 className="text-2xl font-semibold text-black mb-1">Marcar consulta</h1>
         <p className="text-sm text-black/40 mb-10">
-          Pick a doctor, day, and time.
+          Escolha um médico/a, dia e hora.
         </p>
 
         <BookingForm doctors={doctors} token={token} />

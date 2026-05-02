@@ -35,16 +35,21 @@ defmodule CuraWeb.Api.BookingController do
     with true <- user.role == :patient,
          {:ok, meeting} <- Meetings.book_slot(user.id, params) do
       Cura.Emails.send_booking_confirmations(meeting)
+
       conn
       |> put_status(:created)
       |> render(:meeting, meeting: meeting)
     else
-      false -> {:error, :unauthorized}
+      false ->
+        {:error, :unauthorized}
+
       {:error, :slot_unavailable} ->
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{error: "This slot is no longer available."})
-      error -> error
+
+      error ->
+        error
     end
   end
 end

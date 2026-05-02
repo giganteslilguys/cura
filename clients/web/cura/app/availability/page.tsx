@@ -28,14 +28,14 @@ export default async function AvailabilityPage() {
           className="inline-flex items-center gap-1.5 text-xs text-black/35 hover:text-[#b5471b] transition-colors mb-8"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          Back to visits
+          Voltar às consultas
         </Link>
 
         <h1 className="text-2xl font-semibold text-black mb-2">
-          My availability
+          A minha disponibilidade
         </h1>
         <p className="text-sm text-black/40 mb-10">
-          Set the weekly windows when patients can book appointments with you.
+          Defina os horários semanais em que os doentes podem marcar consultas consigo.
         </p>
 
         <AvailabilityManager initialAvailability={availability} token={token} />

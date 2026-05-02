@@ -15,13 +15,12 @@ function isFuture(m: Meeting) {
 }
 
 function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(d).toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function fmtTime(t: string) {
   const [h, min] = t.split(':');
-  const hour = parseInt(h);
-  return `${hour % 12 || 12}:${min} ${hour >= 12 ? 'PM' : 'AM'}`;
+  return `${h.padStart(2, '0')}:${min}`;
 }
 
 function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }) {
@@ -36,7 +35,7 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
           <span className="font-medium text-black truncate">{m.title}</span>
           {m.kind === 'on_site' && (
             <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#b5471b]/10 text-[#b5471b] shrink-0">
-              On-site
+              Presencial
             </span>
           )}
           {canceled && (
@@ -84,7 +83,7 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
             href={`/meetings/${m.id}`}
             className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity"
           >
-            Join <ArrowRight className="w-3.5 h-3.5" />
+            Entrar <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         )}
         {user.role === 'patient' && !upcoming && !canceled && (
@@ -94,7 +93,7 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
             style={{ background: 'rgba(181,71,27,0.08)', color: '#b5471b', border: '1px solid rgba(181,71,27,0.18)' }}
           >
             <FileText className="w-3.5 h-3.5" />
-            View summary
+            Ver resumo
           </Link>
         )}
         {user.role === 'doctor' && upcoming && (
@@ -102,7 +101,7 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
             href={`/meetings/${m.id}`}
             className="flex items-center gap-1.5 px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity"
           >
-            Join <ArrowRight className="w-3.5 h-3.5" />
+            Entrar <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         )}
         {user.role === 'doctor' && !upcoming && !canceled && !hasReport && (
@@ -112,7 +111,7 @@ function MeetingRow({ m, user, last }: { m: Meeting; user: User; last: boolean }
             style={{ background: 'rgba(181,71,27,0.08)', color: '#b5471b', border: '1px solid rgba(181,71,27,0.18)' }}
           >
             <FileText className="w-3.5 h-3.5" />
-            Submit report
+            Submeter relatório
           </Link>
         )}
       </div>
@@ -142,7 +141,7 @@ export default async function MeetingsPage() {
 
       <main className="max-w-xl mx-auto px-6 pt-28 pb-20">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
-          <h1 className="text-2xl font-semibold text-black">Visits</h1>
+          <h1 className="text-2xl font-semibold text-black">Consultas</h1>
           <div className="flex items-center gap-2">
             {user.role === 'patient' && (
               <Link
@@ -151,7 +150,7 @@ export default async function MeetingsPage() {
                 style={{ background: '#b5471b' }}
               >
                 <CalendarPlus className="w-3.5 h-3.5" />
-                Book a visit
+                Marcar consulta
               </Link>
             )}
             {user.role === 'doctor' && (
@@ -163,7 +162,7 @@ export default async function MeetingsPage() {
                   style={{ background: 'rgba(0,0,0,0.04)', color: '#0f0a07', border: '1px solid rgba(0,0,0,0.08)' }}
                 >
                   <Settings2 className="w-3.5 h-3.5" />
-                  Availability
+                  Disponibilidade
                 </Link>
               </>
             )}
@@ -171,9 +170,9 @@ export default async function MeetingsPage() {
         </div>
 
         <section className="mb-10">
-          <p className="text-xs font-semibold uppercase tracking-widest text-black/30 mb-4">Upcoming</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-black/30 mb-4">Próximas</p>
           {upcoming.length === 0 ? (
-            <p className="text-sm text-black/30 italic">No upcoming visits.</p>
+            <p className="text-sm text-black/30 italic">Sem consultas próximas.</p>
           ) : (
             <div>
               {upcoming.map((m, i) => (
@@ -185,7 +184,7 @@ export default async function MeetingsPage() {
 
         {past.length > 0 && (
           <section>
-            <p className="text-xs font-semibold uppercase tracking-widest text-black/30 mb-4">Past visits</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-black/30 mb-4">Consultas anteriores</p>
             <div>
               {past.map((m, i) => (
                 <MeetingRow key={m.id} m={m} user={user} last={i === past.length - 1} />
