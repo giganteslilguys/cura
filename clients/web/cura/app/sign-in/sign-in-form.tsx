@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useActionState, useEffect } from "react";
-import { Mail, Lock, LogIn } from "lucide-react";
+import { useRouter } from 'next/navigation';
+import { useActionState, useEffect } from 'react';
+import { Mail, Lock, LogIn } from 'lucide-react';
 
-import { signInAction, type AuthActionResult } from "@/lib/auth/actions";
+import { signInAction, type AuthActionResult } from '@/lib/auth/actions';
 
 export function SignInForm() {
   const router = useRouter();
@@ -14,7 +14,7 @@ export function SignInForm() {
   >(signInAction, undefined);
 
   useEffect(() => {
-    if (state?.ok) router.replace("/meetings");
+    if (state?.ok) router.replace('/meetings');
   }, [state, router]);
 
   return (
@@ -28,7 +28,7 @@ export function SignInForm() {
           type="email"
           required
           autoComplete="email"
-          className="w-full border-b border-black/12 py-2.5 bg-transparent text-black outline-none focus:border-[#811824] transition-colors placeholder:text-black/20"
+          className="w-full border-b border-black/12 py-2.5 bg-transparent text-black outline-none focus:border-[#b5471b] transition-colors placeholder:text-black/20"
         />
       </label>
 
@@ -41,21 +41,21 @@ export function SignInForm() {
           type="password"
           required
           autoComplete="current-password"
-          className="w-full border-b border-black/12 py-2.5 bg-transparent text-black outline-none focus:border-[#811824] transition-colors"
+          className="w-full border-b border-black/12 py-2.5 bg-transparent text-black outline-none focus:border-[#b5471b] transition-colors"
         />
       </label>
 
       {state && !state.ok && (
-        <p className="text-sm text-[#811824]">{state.error}</p>
+        <p className="text-sm text-[#b5471b]">{state.error}</p>
       )}
 
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-full bg-[#811824] text-white py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center justify-center gap-2"
+        className="w-full rounded-full bg-[#b5471b] text-white py-3 font-medium hover:opacity-90 transition-opacity disabled:opacity-40 flex items-center justify-center gap-2"
       >
         <LogIn className="w-4 h-4" />
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? 'Signing in…' : 'Sign in'}
       </button>
     </form>
   );

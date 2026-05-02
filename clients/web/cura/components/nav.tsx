@@ -1,12 +1,20 @@
-"use client";
+'use client';
 
 import { Heart, LogOut } from 'lucide-react';
+
+import type { User } from '@/lib/api/types';
+import { signOut } from '@/lib/api/auth';
 import { useRouter } from 'next/navigation';
 
-import { signOut } from '@/lib/api/auth';
-import type { User } from '@/lib/api/types';
-
-export function Nav({ user, token, right }: { user?: User, token?: string, right?: React.ReactNode }) {
+export function Nav({
+  user,
+  token,
+  right,
+}: {
+  user?: User;
+  token?: string;
+  right?: React.ReactNode;
+}) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -24,7 +32,8 @@ export function Nav({ user, token, right }: { user?: User, token?: string, right
       <div
         className="pointer-events-auto rounded-full px-6 py-3.5 flex items-center justify-between"
         style={{
-          background: 'linear-gradient(160deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.10) 100%)',
+          background:
+            'linear-gradient(160deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.10) 100%)',
           backdropFilter: 'blur(52px) saturate(180%) brightness(1.05)',
           WebkitBackdropFilter: 'blur(52px) saturate(180%) brightness(1.05)',
           border: '1px solid rgba(255,255,255,0.55)',
@@ -38,18 +47,25 @@ export function Nav({ user, token, right }: { user?: User, token?: string, right
         }}
       >
         <div className="flex items-center">
-          <Heart className="w-5 h-5 mr-2" style={{ color: '#811824' }} />
-          <span className="font-semibold tracking-tight" style={{ color: '#811824' }}>Cura</span>
+          <Heart className="w-5 h-5 mr-2" style={{ color: '#b5471b' }} />
+          <span
+            className="font-semibold tracking-tight"
+            style={{ color: '#b5471b' }}
+          >
+            Cura
+          </span>
         </div>
-        {(user && token) ? (
+        {user && token ? (
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 text-sm text-black/40 transition-colors duration-200 hover:text-[#811824] hover:scale-102"
+            className="flex items-center gap-2 text-sm text-black/40 transition-colors duration-200 hover:text-[#b5471b] hover:scale-102"
           >
             <LogOut className="w-4 h-4" />
             Logout
           </button>
-        ) : right}
+        ) : (
+          right
+        )}
       </div>
     </div>
   );

@@ -1,18 +1,28 @@
-"use client";
+'use client';
 
-import { Camera, CameraOff, DoorOpen, Mic, MicOff, PhoneOff, Sparkles, Video, VideoOff } from "lucide-react";
-import { Channel, Socket } from "phoenix";
-import type { Meeting, Suggestion, User } from "@/lib/api/types";
-import { RefObject, useEffect, useRef, useState } from "react";
+import {
+  Camera,
+  CameraOff,
+  DoorOpen,
+  Mic,
+  MicOff,
+  PhoneOff,
+  Sparkles,
+  Video,
+  VideoOff,
+} from 'lucide-react';
+import { Channel, Socket } from 'phoenix';
+import type { Meeting, Suggestion, User } from '@/lib/api/types';
+import { RefObject, useEffect, useRef, useState } from 'react';
 
-import { PUBLIC_SOCKET_URL } from "@/lib/api/config";
-import { submitMeetingIntake } from "@/lib/api/meetings";
-import { useRouter } from "next/navigation";
+import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
+import { submitMeetingIntake } from '@/lib/api/meetings';
+import { useRouter } from 'next/navigation';
 
 const PC_CONFIG: RTCConfiguration = {
   iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
   ],
 };
 
@@ -22,7 +32,7 @@ type Props = {
   token: string;
 };
 
-type ConnState = "idle" | "waiting" | "connecting" | "connected" | "failed";
+type ConnState = 'idle' | 'waiting' | 'connecting' | 'connected' | 'failed';
 
 type SignalPayload = {
   from: string;
@@ -32,23 +42,27 @@ type SignalPayload = {
 
 type PresenceState = Record<string, { metas: Array<Record<string, unknown>> }>;
 
-type TranscriptEntry = { time: string; text: string; speaker: "doctor" | "patient" };
+type TranscriptEntry = {
+  time: string;
+  text: string;
+  speaker: 'doctor' | 'patient';
+};
 
-type MeetingPhase = "pre" | "active" | "post";
+type MeetingPhase = 'pre' | 'active' | 'post';
 
 function getMeetingPhase(meeting: Meeting): MeetingPhase {
   if (
-    meeting.status === "completed" ||
-    meeting.status === "canceled" ||
-    meeting.status === "rejected"
+    meeting.status === 'completed' ||
+    meeting.status === 'canceled' ||
+    meeting.status === 'rejected'
   ) {
-    return "post";
+    return 'post';
   }
   const now = Date.now();
   const start = new Date(`${meeting.date}T${meeting.time}`).getTime();
   const end = start + meeting.duration * 60 * 1000;
-  if (now >= end) return "post";
-  return "active";
+  if (now >= end) return 'post';
+  return 'active';
 }
 
 function getTimeUntilStart(meeting: Meeting): string | null {
@@ -78,18 +92,20 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
-  const [connState, setConnState] = useState<ConnState>("idle");
+  const [connState, setConnState] = useState<ConnState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [phase, setPhase] = useState<MeetingPhase>(() => getMeetingPhase(meeting));
+  const [phase, setPhase] = useState<MeetingPhase>(() =>
+    getMeetingPhase(meeting),
+  );
 
-  const isDoctor = currentUser.role === "doctor";
+  const isDoctor = currentUser.role === 'doctor';
   const otherParticipant = isDoctor ? meeting.patient : meeting.doctor;
 
   // Re-evaluate phase every 5 s so the view auto-transitions without a reload.
   useEffect(() => {
-    if (phase === "post") return;
+    if (phase === 'post') return;
     const id = setInterval(() => {
       const next = getMeetingPhase(meeting);
       if (next !== phase) setPhase(next);
@@ -99,10 +115,10 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
   // Deterministic caller: lower user id makes the offer, the other side
   // answers. No glare possible, no perfect-negotiation choreography needed.
-  const isCaller = currentUser.id < (otherParticipant?.id ?? "￿");
+  const isCaller = currentUser.id < (otherParticipant?.id ?? '￿');
 
   useEffect(() => {
-    if (phase !== "active") return;
+    if (phase !== 'active') return;
     let cancelled = false;
     let peerPresent = false;
     let didCall = false;
@@ -123,20 +139,20 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
       pc.onicecandidate = ({ candidate }) => {
         if (!candidate) return;
-        channelRef.current?.push("signal", { candidate: candidate.toJSON() });
+        channelRef.current?.push('signal', { candidate: candidate.toJSON() });
       };
 
       pc.onconnectionstatechange = () => {
         if (cancelled) return;
         switch (pc.connectionState) {
-          case "connected":
-            setConnState("connected");
+          case 'connected':
+            setConnState('connected');
             break;
-          case "connecting":
-            setConnState("connecting");
+          case 'connecting':
+            setConnState('connecting');
             break;
-          case "failed":
-            setConnState("failed");
+          case 'failed':
+            setConnState('failed');
             if (isCaller) pc.restartIce();
             break;
         }
@@ -147,9 +163,11 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          channelRef.current?.push("signal", { description: pc.localDescription });
+          channelRef.current?.push('signal', {
+            description: pc.localDescription,
+          });
         } catch (err) {
-          console.error("onnegotiationneeded offer failed:", err);
+          console.error('onnegotiationneeded offer failed:', err);
         }
       };
     };
@@ -162,7 +180,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         try {
           await pc.addIceCandidate(c);
         } catch (err) {
-          console.error("addIceCandidate (drain) failed:", err);
+          console.error('addIceCandidate (drain) failed:', err);
         }
       }
     };
@@ -174,9 +192,11 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        channelRef.current?.push("signal", { description: pc.localDescription });
+        channelRef.current?.push('signal', {
+          description: pc.localDescription,
+        });
       } catch (err) {
-        console.error("createOffer failed:", err);
+        console.error('createOffer failed:', err);
       }
     };
 
@@ -185,12 +205,12 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       didCall = false;
       pendingCandidates = [];
       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-      setConnState("waiting");
+      setConnState('waiting');
       makePc(stream);
     };
 
     const start = async () => {
-      setConnState("waiting");
+      setConnState('waiting');
 
       let stream: MediaStream;
       try {
@@ -203,9 +223,9 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         setError(
           err instanceof Error
             ? `Could not access camera/microphone: ${err.message}`
-            : "Could not access camera/microphone.",
+            : 'Could not access camera/microphone.',
         );
-        setConnState("failed");
+        setConnState('failed');
         return;
       }
       if (cancelled) {
@@ -229,34 +249,52 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       const convChannel = socket.channel(`conversation:${meeting.id}`);
       conversationChannelRef.current = convChannel;
 
-      convChannel.on("transcript_update", ({ text, speaker, timestamp }: { text: string; speaker: "doctor" | "patient"; timestamp: string }) => {
-        if (cancelled) return;
-        const date = new Date(timestamp);
-        const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        setTranscript((prev) => [...prev, { time, text, speaker }]);
-      });
+      convChannel.on(
+        'transcript_update',
+        ({
+          text,
+          speaker,
+          timestamp,
+        }: {
+          text: string;
+          speaker: 'doctor' | 'patient';
+          timestamp: string;
+        }) => {
+          if (cancelled) return;
+          const date = new Date(timestamp);
+          const time = date.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          setTranscript((prev) => [...prev, { time, text, speaker }]);
+        },
+      );
 
       // Append-only running checklist. Backend already dedupes against prior
       // items before broadcasting, so we just concatenate in arrival order.
-      convChannel.on("suggestions_update", ({ suggestions: incoming }: { suggestions: Suggestion[] }) => {
-        if (cancelled || !Array.isArray(incoming) || incoming.length === 0) return;
-        setSuggestions((prev) => {
-          const seen = new Set(prev.map((s) => s.id));
-          const fresh = incoming.filter((s) => !seen.has(s.id));
-          return fresh.length === 0 ? prev : [...prev, ...fresh];
-        });
-      });
+      convChannel.on(
+        'suggestions_update',
+        ({ suggestions: incoming }: { suggestions: Suggestion[] }) => {
+          if (cancelled || !Array.isArray(incoming) || incoming.length === 0)
+            return;
+          setSuggestions((prev) => {
+            const seen = new Set(prev.map((s) => s.id));
+            const fresh = incoming.filter((s) => !seen.has(s.id));
+            return fresh.length === 0 ? prev : [...prev, ...fresh];
+          });
+        },
+      );
 
       convChannel.join();
 
       // Audio capture: record 15-second chunks and send to Whisper via conversation channel.
       // A VAD (voice activity detection) analyser gates each chunk — silent windows are
       // dropped before they reach the network, preventing Whisper hallucinations.
-      const SPEECH_THRESHOLD = 80;  // 0–255 peak frequency amplitude
+      const SPEECH_THRESHOLD = 80; // 0–255 peak frequency amplitude
       const SPEECH_FRAMES_REQUIRED = 2; // at least 2 × 100 ms = 200 ms of real speech
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : "audio/webm";
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
       const audioStream = new MediaStream(stream.getAudioTracks());
 
       const audioCtx = new AudioContext();
@@ -282,17 +320,29 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
         rec.ondataavailable = async (e) => {
           clearInterval(vadInterval);
-          if (!recorderActive || speechFrames < SPEECH_FRAMES_REQUIRED || e.data.size < 500) return;
+          if (
+            !recorderActive ||
+            speechFrames < SPEECH_FRAMES_REQUIRED ||
+            e.data.size < 500
+          )
+            return;
           const buffer = await e.data.arrayBuffer();
           const bytes = new Uint8Array(buffer);
-          let binary = "";
-          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-          conversationChannelRef.current?.push("audio_chunk", { audio: btoa(binary) });
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++)
+            binary += String.fromCharCode(bytes[i]);
+          conversationChannelRef.current?.push('audio_chunk', {
+            audio: btoa(binary),
+          });
         };
 
-        rec.onstop = () => { if (recorderActive) cycleRecorder(); };
+        rec.onstop = () => {
+          if (recorderActive) cycleRecorder();
+        };
         rec.start();
-        setTimeout(() => { if (rec.state === "recording") rec.stop(); }, 4000);
+        setTimeout(() => {
+          if (rec.state === 'recording') rec.stop();
+        }, 4000);
       };
 
       cycleRecorder();
@@ -313,10 +363,10 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         }
       };
 
-      channel.on("presence_state", (state: PresenceState) => onPresence(state));
+      channel.on('presence_state', (state: PresenceState) => onPresence(state));
 
       channel.on(
-        "presence_diff",
+        'presence_diff',
         (diff: { joins: PresenceState; leaves: PresenceState }) => {
           for (const id of Object.keys(diff.leaves)) {
             if (id !== currentUser.id && peerPresent) {
@@ -332,17 +382,17 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         },
       );
 
-      channel.on("signal", async (payload: SignalPayload) => {
+      channel.on('signal', async (payload: SignalPayload) => {
         if (payload.from === currentUser.id) return;
         const pc = pcRef.current;
         if (!pc) return;
         try {
           if (payload.description) {
             await pc.setRemoteDescription(payload.description);
-            if (payload.description.type === "offer") {
+            if (payload.description.type === 'offer') {
               const answer = await pc.createAnswer();
               await pc.setLocalDescription(answer);
-              channel.push("signal", { description: pc.localDescription });
+              channel.push('signal', { description: pc.localDescription });
             }
             await drainPendingCandidates();
           } else if (payload.candidate) {
@@ -353,14 +403,14 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
             }
           }
         } catch (err) {
-          console.error("signal handling failed:", err);
+          console.error('signal handling failed:', err);
         }
       });
 
-      channel.join().receive("error", ({ reason }: { reason: string }) => {
+      channel.join().receive('error', ({ reason }: { reason: string }) => {
         if (cancelled) return;
         setError(`Could not join room: ${reason}`);
-        setConnState("failed");
+        setConnState('failed');
       });
     };
 
@@ -368,11 +418,21 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
     return () => {
       cancelled = true;
-      try { stopRecordingRef.current?.(); } catch {}
-      try { conversationChannelRef.current?.leave(); } catch {}
-      try { channelRef.current?.leave(); } catch {}
-      try { socketRef.current?.disconnect(); } catch {}
-      try { pcRef.current?.close(); } catch {}
+      try {
+        stopRecordingRef.current?.();
+      } catch {}
+      try {
+        conversationChannelRef.current?.leave();
+      } catch {}
+      try {
+        channelRef.current?.leave();
+      } catch {}
+      try {
+        socketRef.current?.disconnect();
+      } catch {}
+      try {
+        pcRef.current?.close();
+      } catch {}
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     };
@@ -393,7 +453,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
     setVideoOff(!video.enabled);
   };
 
-  const endCall = () => router.push("/meetings");
+  const endCall = () => router.push('/meetings');
 
   if (isDoctor) {
     return (
@@ -415,11 +475,11 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
     );
   }
 
-  if (phase === "pre") {
+  if (phase === 'pre') {
     return <PatientPreMeetingView meeting={meeting} token={token} />;
   }
 
-  if (phase === "post") {
+  if (phase === 'post') {
     return <PatientPostMeetingView meeting={meeting} onBack={endCall} />;
   }
 
@@ -468,7 +528,9 @@ function DoctorMeetingRoom({
   onToggleVideo: () => void;
   onEndCall: () => void;
 }) {
-  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(new Set());
+  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(
+    new Set(),
+  );
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -487,10 +549,13 @@ function DoctorMeetingRoom({
 
   const patientName = patient
     ? `${patient.first_name} ${patient.last_name}`
-    : "Patient";
+    : 'Patient';
 
   return (
-    <div className="flex flex-col h-screen text-black" style={{ background: '#ffffff' }}>
+    <div
+      className="flex flex-col h-screen text-black"
+      style={{ background: '#ffffff' }}
+    >
       {/* Top — no bar, just text with breathing room */}
       <div className="flex items-center justify-between px-8 pt-7 pb-0 shrink-0">
         <div>
@@ -498,10 +563,12 @@ function DoctorMeetingRoom({
           <p className="text-xs text-black/40 mt-0.5">{meeting.title}</p>
         </div>
         <div className="flex items-center gap-6">
-          <span className="text-xs text-black/20">HIPAA-compliant · Encrypted</span>
+          <span className="text-xs text-black/20">
+            HIPAA-compliant · Encrypted
+          </span>
           <button
             onClick={onEndCall}
-            className="px-5 py-2.5 rounded-full bg-[#811824] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            className="px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
           >
             <DoorOpen className="w-4 h-4" /> End visit
           </button>
@@ -511,9 +578,15 @@ function DoctorMeetingRoom({
       {/* Main */}
       <div className="flex flex-1 gap-5 p-6 overflow-hidden">
         {/* Left: Video + Transcript */}
-        <div className="flex flex-col gap-4 self-stretch overflow-hidden" style={{ flex: '0 0 auto' }}>
+        <div
+          className="flex flex-col gap-4 self-stretch overflow-hidden"
+          style={{ flex: '0 0 auto' }}
+        >
           {/* Video: 2/5 of viewport height, 16:9 aspect ratio */}
-          <div className="relative rounded-2xl overflow-hidden bg-black shrink-0" style={{ height: '55vh', aspectRatio: '16/9' }}>
+          <div
+            className="relative rounded-2xl overflow-hidden bg-black shrink-0"
+            style={{ height: '55vh', aspectRatio: '16/9' }}
+          >
             <video
               ref={remoteVideoRef}
               autoPlay
@@ -522,11 +595,13 @@ function DoctorMeetingRoom({
             />
 
             {/* Peer status badge */}
-            {connState !== "connected" && (
+            {connState !== 'connected' && (
               <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 pointer-events-none">
                 <span className="w-1.5 h-1.5 rounded-full bg-stone-400 animate-pulse" />
                 <span className="text-white/70 text-xs">
-                  {connState === "connecting" ? "Connecting…" : `Waiting for ${patientName}…`}
+                  {connState === 'connecting'
+                    ? 'Connecting…'
+                    : `Waiting for ${patientName}…`}
                 </span>
               </div>
             )}
@@ -536,25 +611,33 @@ function DoctorMeetingRoom({
               <div className="flex items-center gap-2 bg-black/30 backdrop-blur-xl rounded-full px-4 py-2.5 border border-white/10">
                 <button
                   onClick={onToggleMute}
-                  aria-label={muted ? "Unmute" : "Mute"}
+                  aria-label={muted ? 'Unmute' : 'Mute'}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                     muted
-                      ? "bg-[#811824] text-white"
-                      : "bg-white/10 hover:bg-white/20 text-white"
+                      ? 'bg-[#b5471b] text-white'
+                      : 'bg-white/10 hover:bg-white/20 text-white'
                   }`}
                 >
-                  {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  {muted ? (
+                    <MicOff className="w-4 h-4" />
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
                 </button>
                 <button
                   onClick={onToggleVideo}
-                  aria-label={videoOff ? "Turn camera on" : "Turn camera off"}
+                  aria-label={videoOff ? 'Turn camera on' : 'Turn camera off'}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                     videoOff
-                      ? "bg-[#811824] text-white"
-                      : "bg-white/10 hover:bg-white/20 text-white"
+                      ? 'bg-[#b5471b] text-white'
+                      : 'bg-white/10 hover:bg-white/20 text-white'
                   }`}
                 >
-                  {videoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                  {videoOff ? (
+                    <VideoOff className="w-4 h-4" />
+                  ) : (
+                    <Video className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -587,8 +670,8 @@ function DoctorMeetingRoom({
               </span>
               <span className="text-xs text-black/20">
                 {transcript.length === 0
-                  ? "Waiting…"
-                  : `${transcript.length} segment${transcript.length === 1 ? "" : "s"}`}
+                  ? 'Waiting…'
+                  : `${transcript.length} segment${transcript.length === 1 ? '' : 's'}`}
               </span>
             </div>
             <div className="space-y-1.5">
@@ -602,10 +685,14 @@ function DoctorMeetingRoom({
                     <span className="text-black/25 font-mono w-10 shrink-0 pt-px">
                       {entry.time}
                     </span>
-                    <span className={`w-14 shrink-0 font-semibold pt-px ${entry.speaker === "doctor" ? "text-orange-500" : "text-blue-500"}`}>
-                      {entry.speaker === "doctor" ? "Médico" : "Paciente"}
+                    <span
+                      className={`w-14 shrink-0 font-semibold pt-px ${entry.speaker === 'doctor' ? 'text-orange-500' : 'text-blue-500'}`}
+                    >
+                      {entry.speaker === 'doctor' ? 'Médico' : 'Paciente'}
                     </span>
-                    <span className="text-stone-700 leading-relaxed">{entry.text}</span>
+                    <span className="text-stone-700 leading-relaxed">
+                      {entry.text}
+                    </span>
                   </div>
                 ))
               )}
@@ -614,7 +701,7 @@ function DoctorMeetingRoom({
         </div>
 
         {/* Right: Patient Intake + AI Suggestions */}
-        <aside className="w-72 shrink-0 flex flex-col gap-3 overflow-hidden">
+        <div className="w-203 shrink-0 flex flex-col gap-3 overflow-hidden">
           {/* Patient intake */}
           {meeting.patient_intake ? (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
@@ -624,25 +711,33 @@ function DoctorMeetingRoom({
               <div className="flex flex-col gap-2">
                 <div>
                   <p className="text-xs text-stone-400 mb-0.5">Reason</p>
-                  <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.reason}</p>
+                  <p className="text-xs text-stone-700 leading-relaxed">
+                    {meeting.patient_intake.reason}
+                  </p>
                 </div>
                 {meeting.patient_intake.symptoms && (
                   <div>
                     <p className="text-xs text-stone-400 mb-0.5">Symptoms</p>
-                    <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.symptoms}</p>
+                    <p className="text-xs text-stone-700 leading-relaxed">
+                      {meeting.patient_intake.symptoms}
+                    </p>
                   </div>
                 )}
                 {meeting.patient_intake.notes && (
                   <div>
                     <p className="text-xs text-stone-400 mb-0.5">Notes</p>
-                    <p className="text-xs text-stone-700 leading-relaxed">{meeting.patient_intake.notes}</p>
+                    <p className="text-xs text-stone-700 leading-relaxed">
+                      {meeting.patient_intake.notes}
+                    </p>
                   </div>
                 )}
               </div>
             </div>
           ) : (
             <div className="bg-stone-50 rounded-xl border border-stone-200 px-4 py-3 shrink-0">
-              <p className="text-xs text-stone-400 italic">Patient has not filled in pre-visit information yet.</p>
+              <p className="text-xs text-stone-400 italic">
+                Patient has not filled in pre-visit information yet.
+              </p>
             </div>
           )}
 
@@ -650,9 +745,13 @@ function DoctorMeetingRoom({
             <div>
               <div className="flex items-center gap-2 mb-0.5">
                 <SparkleIcon className="w-4 h-4 text-orange-500 shrink-0" />
-                <h2 className="font-semibold text-stone-900 text-sm">AI Suggestions</h2>
+                <h2 className="font-semibold text-stone-900 text-sm">
+                  AI Suggestions
+                </h2>
               </div>
-              <p className="text-xs text-stone-400 ml-6">Real-time guidance during your visit</p>
+              <p className="text-xs text-stone-400 ml-6">
+                Real-time guidance during your visit
+              </p>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -673,14 +772,14 @@ function DoctorMeetingRoom({
             </div>
           </div>
 
-          <button className="text-sm text-[#811824] font-medium text-left hover:opacity-70 transition-opacity mt-auto">
+          <button className="w-full px-5 py-3 rounded-full bg-stone-100 border border-stone-200 text-stone-800 text-sm font-medium hover:bg-stone-200 transition-colors text-center shrink-0">
             View draft SOAP note →
           </button>
-        </aside>
+        </div>
       </div>
 
       {error && (
-        <div className="px-8 py-3 text-sm text-[#811824] border-t border-[#811824]/15">
+        <div className="px-8 py-3 text-sm text-[#b5471b] border-t border-[#b5471b]/15">
           {error}
         </div>
       )}
@@ -699,28 +798,32 @@ function SuggestionCard({
 }) {
   // Flags carry safety weight, so they get a distinct red treatment regardless
   // of priority. Questions and actions follow priority-based emphasis.
-  const isFlag = suggestion.type === "flag";
-  const isHigh = suggestion.priority === "high";
+  const isFlag = suggestion.type === 'flag';
+  const isHigh = suggestion.priority === 'high';
 
   const cardClass = isFlag
-    ? "bg-[#811824]/5 border-[#811824]/20"
+    ? 'bg-[#b5471b]/5 border-[#b5471b]/20'
     : isHigh
-    ? "bg-orange-50 border-orange-200"
-    : "bg-stone-50 border-stone-100";
+      ? 'bg-orange-50 border-orange-200'
+      : 'bg-stone-50 border-stone-100';
 
-  const iconClass = isFlag ? "text-[#811824]" : "text-orange-500";
+  const iconClass = isFlag ? 'text-[#b5471b]' : 'text-orange-500';
   const typeLabel = suggestion.type[0].toUpperCase() + suggestion.type.slice(1);
 
   return (
-    <div className={`p-3 rounded-xl border transition-opacity ${cardClass} ${done ? "opacity-40" : ""}`}>
+    <div
+      className={`p-3 rounded-xl border transition-opacity ${cardClass} ${done ? 'opacity-40' : ''}`}
+    >
       <div className="flex items-start gap-2 mb-1.5">
         <SparkleIcon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${iconClass}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className={`text-[10px] font-semibold uppercase tracking-wider ${iconClass}`}>
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wider ${iconClass}`}
+            >
               {typeLabel}
             </span>
-            {suggestion.priority !== "medium" && (
+            {suggestion.priority !== 'medium' && (
               <span className="text-[10px] text-stone-400 uppercase tracking-wider">
                 · {suggestion.priority}
               </span>
@@ -740,7 +843,7 @@ function SuggestionCard({
           className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors"
         >
           <CheckIcon className="w-3 h-3" />
-          {done ? "Undo" : "Done"}
+          {done ? 'Undo' : 'Done'}
         </button>
       </div>
     </div>
@@ -773,22 +876,24 @@ function PatientMeetingRoom({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
-    if (connState !== "connected") return;
+    if (connState !== 'connected') return;
     const timer = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
     return () => clearInterval(timer);
   }, [connState]);
 
   const formatElapsed = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, "0");
-    const s = (secs % 60).toString().padStart(2, "0");
+    const m = Math.floor(secs / 60)
+      .toString()
+      .padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
 
   const doctorName = doctor
     ? `Dr. ${doctor.first_name} ${doctor.last_name}`
-    : "Doctor";
+    : 'Doctor';
 
-  const isConnected = connState === "connected";
+  const isConnected = connState === 'connected';
 
   return (
     <div className="relative flex flex-col h-screen bg-black text-white overflow-hidden">
@@ -814,13 +919,15 @@ function PatientMeetingRoom({
       <div className="relative z-10 flex justify-center pt-5">
         <div className="flex items-center gap-3 bg-black/25 backdrop-blur-xl rounded-full px-5 py-2.5 border border-white/10">
           <span className="font-semibold text-white text-sm">cura</span>
-          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? "bg-white/70" : "bg-white/20"}`} />
+          <span
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? 'bg-white/70' : 'bg-white/20'}`}
+          />
           <span className="text-white/50 text-xs">
             {isConnected
               ? `Connected · ${formatElapsed(elapsedSeconds)}`
-              : connState === "waiting"
-              ? `Waiting for ${doctorName}…`
-              : "Connecting…"}
+              : connState === 'waiting'
+                ? `Waiting for ${doctorName}…`
+                : 'Connecting…'}
           </span>
         </div>
       </div>
@@ -843,8 +950,9 @@ function PatientMeetingRoom({
         />
         {videoOff && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/70">
-                      <CameraOff className="w-4 h-4 text-white/30" />
-                    </div>        )}
+            <CameraOff className="w-4 h-4 text-white/30" />
+          </div>
+        )}
       </div>
 
       {/* Controls glass capsule at bottom */}
@@ -852,26 +960,38 @@ function PatientMeetingRoom({
         <div className="flex items-center gap-3 bg-black/25 backdrop-blur-xl rounded-full px-5 py-3 border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.4)]">
           <button
             onClick={onToggleMute}
-            aria-label={muted ? "Unmute" : "Mute"}
+            aria-label={muted ? 'Unmute' : 'Mute'}
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
-              muted ? "bg-[#811824] text-white" : "bg-white/10 hover:bg-white/20 text-white"
+              muted
+                ? 'bg-[#b5471b] text-white'
+                : 'bg-white/10 hover:bg-white/20 text-white'
             }`}
           >
-            {muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            {muted ? (
+              <MicOff className="w-5 h-5" />
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
           </button>
           <button
             onClick={onToggleVideo}
-            aria-label={videoOff ? "Turn camera on" : "Turn camera off"}
+            aria-label={videoOff ? 'Turn camera on' : 'Turn camera off'}
             className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
-              videoOff ? "bg-[#811824] text-white" : "bg-white/10 hover:bg-white/20 text-white"
+              videoOff
+                ? 'bg-[#b5471b] text-white'
+                : 'bg-white/10 hover:bg-white/20 text-white'
             }`}
           >
-            {videoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+            {videoOff ? (
+              <VideoOff className="w-5 h-5" />
+            ) : (
+              <Video className="w-5 h-5" />
+            )}
           </button>
           <button
             onClick={onEndCall}
             aria-label="Leave"
-            className="w-11 h-11 rounded-full bg-[#811824] hover:opacity-90 flex items-center justify-center text-white transition-opacity"
+            className="w-11 h-11 rounded-full bg-[#b5471b] hover:opacity-90 flex items-center justify-center text-white transition-opacity"
           >
             <PhoneOff className="w-5 h-5" />
           </button>
@@ -895,28 +1015,36 @@ function PatientPreMeetingView({
   token: string;
 }) {
   const [timeUntil, setTimeUntil] = useState(() => getTimeUntilStart(meeting));
-  const [reason, setReason] = useState("");
-  const [symptoms, setSymptoms] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitted, setSubmitted] = useState(() => meeting.patient_intake !== null);
+  const [reason, setReason] = useState('');
+  const [symptoms, setSymptoms] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitted, setSubmitted] = useState(
+    () => meeting.patient_intake !== null,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = setInterval(() => setTimeUntil(getTimeUntilStart(meeting)), 1_000);
+    const id = setInterval(
+      () => setTimeUntil(getTimeUntilStart(meeting)),
+      1_000,
+    );
     return () => clearInterval(id);
   }, [meeting]);
 
   const start = new Date(`${meeting.date}T${meeting.time}`);
   const dateStr = start.toLocaleDateString([], {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
   });
-  const timeStr = start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const timeStr = start.toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
   const doctorName = meeting.doctor
     ? `Dr. ${meeting.doctor.first_name} ${meeting.doctor.last_name}`
-    : "Your Doctor";
+    : 'Your Doctor';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -926,12 +1054,16 @@ function PatientPreMeetingView({
     try {
       await submitMeetingIntake(
         meeting.id,
-        { reason: reason.trim(), symptoms: symptoms.trim() || null, notes: notes.trim() || null },
+        {
+          reason: reason.trim(),
+          symptoms: symptoms.trim() || null,
+          notes: notes.trim() || null,
+        },
         token,
       );
       setSubmitted(true);
     } catch {
-      setSubmitError("Failed to save your information. Please try again.");
+      setSubmitError('Failed to save your information. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -947,7 +1079,9 @@ function PatientPreMeetingView({
           <span className="text-white/70 text-xs">Appointment scheduled</span>
         </div>
         {timeUntil && (
-          <span className="text-white/60 text-xs tabular-nums">in {timeUntil}</span>
+          <span className="text-white/60 text-xs tabular-nums">
+            in {timeUntil}
+          </span>
         )}
       </div>
 
@@ -974,7 +1108,9 @@ function PatientPreMeetingView({
             <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
               <CheckIcon className="w-6 h-6 text-green-400" />
             </div>
-            <p className="font-semibold text-white">Information sent to your doctor</p>
+            <p className="font-semibold text-white">
+              Information sent to your doctor
+            </p>
             <p className="text-white/50 text-sm">
               This page will open automatically when your appointment begins.
             </p>
@@ -1009,7 +1145,9 @@ function PatientPreMeetingView({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-white/80">Symptoms</label>
+              <label className="text-sm font-medium text-white/80">
+                Symptoms
+              </label>
               <textarea
                 value={symptoms}
                 onChange={(e) => setSymptoms(e.target.value)}
@@ -1021,7 +1159,9 @@ function PatientPreMeetingView({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-white/80">Additional notes</label>
+              <label className="text-sm font-medium text-white/80">
+                Additional notes
+              </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -1041,7 +1181,7 @@ function PatientPreMeetingView({
               disabled={submitting || !reason.trim()}
               className="w-full py-3 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-full text-sm font-semibold transition-colors"
             >
-              {submitting ? "Saving…" : "Send to doctor"}
+              {submitting ? 'Saving…' : 'Send to doctor'}
             </button>
           </form>
         )}
@@ -1057,15 +1197,16 @@ function PatientPostMeetingView({
   meeting: Meeting;
   onBack: () => void;
 }) {
-  const isCanceled = meeting.status === "canceled" || meeting.status === "rejected";
+  const isCanceled =
+    meeting.status === 'canceled' || meeting.status === 'rejected';
   const doctorName = meeting.doctor
     ? `Dr. ${meeting.doctor.first_name} ${meeting.doctor.last_name}`
-    : "Your Doctor";
+    : 'Your Doctor';
   const start = new Date(`${meeting.date}T${meeting.time}`);
   const dateStr = start.toLocaleDateString([], {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
   });
 
   return (
@@ -1074,17 +1215,21 @@ function PatientPostMeetingView({
       <div className="absolute top-0 left-0 right-0 flex items-center px-5 py-4">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-white text-sm">Cura</span>
-          <span className={`w-2 h-2 rounded-full ${isCanceled ? "bg-stone-500" : "bg-green-400"}`} />
+          <span
+            className={`w-2 h-2 rounded-full ${isCanceled ? 'bg-stone-500' : 'bg-green-400'}`}
+          />
           <span className="text-white/70 text-xs">
-            {isCanceled ? "Appointment canceled" : "Appointment ended"}
+            {isCanceled ? 'Appointment canceled' : 'Appointment ended'}
           </span>
         </div>
       </div>
 
       <div className="flex flex-col items-center gap-6 max-w-md w-full text-center">
-        <div className={`w-20 h-20 rounded-full flex items-center justify-center ${
-          isCanceled ? "bg-white/10" : "bg-white/10"
-        }`}>
+        <div
+          className={`w-20 h-20 rounded-full flex items-center justify-center ${
+            isCanceled ? 'bg-white/10' : 'bg-white/10'
+          }`}
+        >
           {isCanceled ? (
             <PhoneOffIcon className="w-9 h-9 text-white/50" />
           ) : (
@@ -1094,11 +1239,11 @@ function PatientPostMeetingView({
 
         <div>
           <p className="text-xl font-semibold text-white">
-            {isCanceled ? "Appointment canceled" : "Visit complete"}
+            {isCanceled ? 'Appointment canceled' : 'Visit complete'}
           </p>
           <p className="text-white/50 text-sm mt-1">
             {isCanceled
-              ? "This appointment was canceled."
+              ? 'This appointment was canceled.'
               : `Your visit with ${doctorName} has ended.`}
           </p>
         </div>
@@ -1145,7 +1290,7 @@ function Tile({
       {children}
       {(videoOff || waiting) && (
         <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm pointer-events-none">
-          {waiting ? "Waiting…" : "Camera off"}
+          {waiting ? 'Waiting…' : 'Camera off'}
         </div>
       )}
       <div className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/60 text-xs">
@@ -1168,7 +1313,15 @@ function PersonIcon({ className }: { className?: string }) {
 
 function MicIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="9" y="2" width="6" height="12" rx="3" />
       <path d="M5 10a7 7 0 0014 0M12 19v3M9 22h6" />
     </svg>
@@ -1177,7 +1330,15 @@ function MicIcon({ className }: { className?: string }) {
 
 function MicOffIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <line x1="2" y1="2" x2="22" y2="22" />
       <path d="M18.89 13.23A7 7 0 0019 12M5 10a7 7 0 0012.66 4.13M15 9.34V4a3 3 0 00-5.68-1.33M9 9v3a3 3 0 005.12 2.12" />
       <line x1="12" y1="19" x2="12" y2="22" />
@@ -1188,7 +1349,15 @@ function MicOffIcon({ className }: { className?: string }) {
 
 function CameraIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M23 7l-7 5 7 5V7z" />
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
     </svg>
@@ -1197,7 +1366,15 @@ function CameraIcon({ className }: { className?: string }) {
 
 function CameraOffIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <line x1="2" y1="2" x2="22" y2="22" />
       <path d="M9 9H1v10a2 2 0 002 2h12a2 2 0 001.73-1M16 5a2 2 0 00-2-2H6.73M23 7l-7 5 7 5V7z" />
     </svg>
@@ -1206,7 +1383,15 @@ function CameraOffIcon({ className }: { className?: string }) {
 
 function ScreenShareIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="2" y="3" width="20" height="14" rx="2" />
       <polyline points="8 21 12 17 16 21" />
       <line x1="12" y1="17" x2="12" y2="21" />
@@ -1216,7 +1401,15 @@ function ScreenShareIcon({ className }: { className?: string }) {
 
 function LinkIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
     </svg>
@@ -1233,7 +1426,15 @@ function SparkleIcon({ className }: { className?: string }) {
 
 function CheckIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );
@@ -1241,7 +1442,15 @@ function CheckIcon({ className }: { className?: string }) {
 
 function ChevronRightIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polyline points="9 18 15 12 9 6" />
     </svg>
   );
@@ -1249,7 +1458,15 @@ function ChevronRightIcon({ className }: { className?: string }) {
 
 function StethoscopeIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M7 2v5a5 5 0 0010 0V2" />
       <path d="M12 12v4" />
       <circle cx="12" cy="18" r="2" />
@@ -1260,7 +1477,15 @@ function StethoscopeIcon({ className }: { className?: string }) {
 
 function PhoneOffIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M10.68 13.31a16 16 0 003.01 3.01l1.6-1.6a2 2 0 012.05-.45c1.13.4 2.35.62 3.61.62a2 2 0 012 2V21a2 2 0 01-2 2A18 18 0 013 5a2 2 0 012-2h3.5a2 2 0 012 2c0 1.26.22 2.48.62 3.61a2 2 0 01-.45 2.05l-1.6 1.6z" />
       <line x1="2" y1="2" x2="22" y2="22" />
     </svg>
