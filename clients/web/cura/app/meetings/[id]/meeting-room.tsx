@@ -2096,10 +2096,6 @@ function DoctorMeetingRoom({
               )}
             </div>
           </div>
-
-          <button className="w-full py-3 px-4 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors text-left shrink-0 cursor-pointer">
-            Ver rascunho do resumo (73% completo)
-          </button>
         </div>
       </div>
 
