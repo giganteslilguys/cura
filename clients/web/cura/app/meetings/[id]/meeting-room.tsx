@@ -30,18 +30,12 @@ type SignalPayload = {
 
 type PresenceState = Record<string, { metas: Array<Record<string, unknown>> }>;
 
+type TranscriptEntry = { time: string; text: string };
+
 const MOCK_SUGGESTIONS = [
   { id: 1, text: "Consider asking about sleep quality — fatigue mentioned" },
   { id: 2, text: "Confirm medication adherence" },
   { id: 3, text: "BP slightly elevated — discuss stress levels" },
-];
-
-const MOCK_TRANSCRIPT = [
-  { time: "13:58", speaker: "Dr.", text: "How about your sleep? Are you getting enough rest at night?" },
-  { time: "14:05", speaker: "Pt.", text: "I think so, about 7 hours most nights." },
-  { time: "14:12", speaker: "Dr.", text: "And are you still taking your medications regularly?" },
-  { time: "14:18", speaker: "Pt.", text: "Yes, every morning with breakfast. Haven't missed any doses." },
-  { time: "14:28", speaker: "Dr.", text: "That's good. Let's talk about stress — anything new at work or home?" },
 ];
 
 export function MeetingRoom({ meeting, currentUser, token }: Props) {
@@ -52,13 +46,16 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<Channel | null>(null);
+  const conversationChannelRef = useRef<Channel | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const stopRecordingRef = useRef<(() => void) | null>(null);
 
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
   const [connState, setConnState] = useState<ConnState>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
 
   const isDoctor = currentUser.role === "doctor";
   const otherParticipant = isDoctor ? meeting.patient : meeting.doctor;
@@ -201,6 +198,72 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       const channel = socket.channel(`room:${meeting.id}`);
       channelRef.current = channel;
 
+      // Conversation channel — audio transcription
+      const convChannel = socket.channel(`conversation:${meeting.id}`);
+      conversationChannelRef.current = convChannel;
+
+      convChannel.on("transcript_update", ({ text, timestamp }: { text: string; timestamp: string }) => {
+        if (cancelled) return;
+        const date = new Date(timestamp);
+        const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        setTranscript((prev) => [...prev, { time, text }]);
+      });
+
+      convChannel.join();
+
+      // Audio capture: record 15-second chunks and send to Whisper via conversation channel.
+      // A VAD (voice activity detection) analyser gates each chunk — silent windows are
+      // dropped before they reach the network, preventing Whisper hallucinations.
+      const SPEECH_THRESHOLD = 50;  // 0–255 frequency amplitude
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+      const audioStream = new MediaStream(stream.getAudioTracks());
+
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(audioStream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+      let recorderActive = true;
+      let currentRecorder: MediaRecorder | null = null;
+
+      const cycleRecorder = () => {
+        if (!recorderActive) return;
+        const rec = new MediaRecorder(audioStream, { mimeType });
+        currentRecorder = rec;
+
+        let hadSpeech = false;
+        const vadInterval = setInterval(() => {
+          analyser.getByteFrequencyData(freqData);
+          if (Math.max(...freqData) > SPEECH_THRESHOLD) hadSpeech = true;
+        }, 100);
+
+        rec.ondataavailable = async (e) => {
+          clearInterval(vadInterval);
+          if (!recorderActive || !hadSpeech || e.data.size < 500) return;
+          const buffer = await e.data.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = "";
+          for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+          conversationChannelRef.current?.push("audio_chunk", { audio: btoa(binary) });
+        };
+
+        rec.onstop = () => { if (recorderActive) cycleRecorder(); };
+        rec.start();
+        setTimeout(() => { if (rec.state === "recording") rec.stop(); }, 5000);
+      };
+
+      cycleRecorder();
+
+      stopRecordingRef.current = () => {
+        recorderActive = false;
+        currentRecorder?.stop();
+        audioCtx.close();
+      };
+
       const onPresence = (state: PresenceState) => {
         const others = Object.keys(state).filter((id) => id !== currentUser.id);
         if (others.length > 0 && !peerPresent) {
@@ -266,15 +329,11 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
     return () => {
       cancelled = true;
-      try {
-        channelRef.current?.leave();
-      } catch {}
-      try {
-        socketRef.current?.disconnect();
-      } catch {}
-      try {
-        pcRef.current?.close();
-      } catch {}
+      try { stopRecordingRef.current?.(); } catch {}
+      try { conversationChannelRef.current?.leave(); } catch {}
+      try { channelRef.current?.leave(); } catch {}
+      try { socketRef.current?.disconnect(); } catch {}
+      try { pcRef.current?.close(); } catch {}
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
     };
@@ -308,6 +367,7 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
         muted={muted}
         videoOff={videoOff}
         error={error}
+        transcript={transcript}
         onToggleMute={toggleMute}
         onToggleVideo={toggleVideo}
         onEndCall={endCall}
@@ -340,6 +400,7 @@ function DoctorMeetingRoom({
   muted,
   videoOff,
   error,
+  transcript,
   onToggleMute,
   onToggleVideo,
   onEndCall,
@@ -352,6 +413,7 @@ function DoctorMeetingRoom({
   muted: boolean;
   videoOff: boolean;
   error: string | null;
+  transcript: TranscriptEntry[];
   onToggleMute: () => void;
   onToggleVideo: () => void;
   onEndCall: () => void;
@@ -493,25 +555,28 @@ function DoctorMeetingRoom({
           </div>
 
           {/* Transcript */}
-          <div className="bg-white rounded-xl border border-stone-200 px-4 pt-3 pb-4 shrink-0">
+          <div className="bg-white rounded-xl border border-stone-200 px-4 pt-3 pb-4 shrink-0 max-h-48 overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold tracking-widest text-stone-500 uppercase">
                 Live Transcript
               </span>
-              <span className="text-xs text-stone-400">Last 5 exchanges</span>
+              <span className="text-xs text-stone-400">
+                {transcript.length === 0 ? "Waiting…" : `${transcript.length} segment${transcript.length === 1 ? "" : "s"}`}
+              </span>
             </div>
             <div className="space-y-1.5">
-              {MOCK_TRANSCRIPT.map((entry, i) => (
-                <div key={i} className="flex gap-3 text-xs">
-                  <span className="text-stone-400 font-mono w-10 shrink-0 pt-px">
-                    {entry.time}
-                  </span>
-                  <span className="text-stone-500 w-6 shrink-0 font-medium pt-px">
-                    {entry.speaker}
-                  </span>
-                  <span className="text-stone-700 leading-relaxed">{entry.text}</span>
-                </div>
-              ))}
+              {transcript.length === 0 ? (
+                <p className="text-xs text-stone-400 italic">Transcription will appear here once the conversation starts.</p>
+              ) : (
+                transcript.slice(-8).map((entry, i) => (
+                  <div key={i} className="flex gap-3 text-xs">
+                    <span className="text-stone-400 font-mono w-10 shrink-0 pt-px">
+                      {entry.time}
+                    </span>
+                    <span className="text-stone-700 leading-relaxed">{entry.text}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
