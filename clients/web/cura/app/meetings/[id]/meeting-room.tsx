@@ -1116,7 +1116,7 @@ function DoctorMeetingRoom({
           </span>
           <button
             onClick={onEndCall}
-            className="px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            className="px-5 py-2.5 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
           >
             <DoorOpen className="w-4 h-4" /> End visit
           </button>
@@ -1160,7 +1160,7 @@ function DoctorMeetingRoom({
                 <button
                   onClick={onToggleMute}
                   aria-label={muted ? 'Unmute' : 'Mute'}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
                     muted
                       ? 'bg-[#b5471b] text-white'
                       : 'bg-white/10 hover:bg-white/20 text-white'
@@ -1175,7 +1175,7 @@ function DoctorMeetingRoom({
                 <button
                   onClick={onToggleVideo}
                   aria-label={videoOff ? 'Turn camera on' : 'Turn camera off'}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
                     videoOff
                       ? 'bg-[#b5471b] text-white'
                       : 'bg-white/10 hover:bg-white/20 text-white'
@@ -1294,7 +1294,7 @@ function DoctorMeetingRoom({
             </div>
           </div>
 
-          <button className="w-full py-3 px-4 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors text-left shrink-0">
+          <button className="w-full py-3 px-4 bg-white border border-stone-200 rounded-xl text-sm font-medium text-stone-700 hover:bg-stone-50 transition-colors text-left shrink-0 cursor-pointer">
             View draft summary (73% complete)
           </button>
         </div>
@@ -1362,7 +1362,7 @@ function SuggestionCard({
       <div className="flex gap-4 pl-5 mt-1.5">
         <button
           onClick={onToggle}
-          className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors"
+          className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800 transition-colors cursor-pointer"
         >
           <CheckIcon className="w-3 h-3" />
           {done ? 'Undo' : 'Done'}
@@ -1483,7 +1483,7 @@ function PatientMeetingRoom({
           <button
             onClick={onToggleMute}
             aria-label={muted ? 'Unmute' : 'Mute'}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
               muted
                 ? 'bg-[#b5471b] text-white'
                 : 'bg-white/10 hover:bg-white/20 text-white'
@@ -1498,7 +1498,7 @@ function PatientMeetingRoom({
           <button
             onClick={onToggleVideo}
             aria-label={videoOff ? 'Turn camera on' : 'Turn camera off'}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors ${
+            className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
               videoOff
                 ? 'bg-[#b5471b] text-white'
                 : 'bg-white/10 hover:bg-white/20 text-white'
@@ -1513,7 +1513,7 @@ function PatientMeetingRoom({
           <button
             onClick={onEndCall}
             aria-label="Leave"
-            className="w-11 h-11 rounded-full bg-[#b5471b] hover:opacity-90 flex items-center justify-center text-white transition-opacity"
+            className="w-11 h-11 rounded-full bg-[#b5471b] hover:opacity-90 flex items-center justify-center text-white transition-opacity cursor-pointer"
           >
             <PhoneOff className="w-5 h-5" />
           </button>
