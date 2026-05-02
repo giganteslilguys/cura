@@ -665,7 +665,7 @@ function DoctorMeetingRoom({
             className="flex-1 min-h-0 border-t border-black/[0.06] pt-4 pb-2 overflow-y-auto"
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-black/35 uppercase tracking-widest">
+              <span className="text-xs font-medium text-black/40 uppercase tracking-widest">
                 Live Transcript
               </span>
               <span className="text-xs text-black/20">
@@ -701,7 +701,7 @@ function DoctorMeetingRoom({
         </div>
 
         {/* Right: Patient Intake + AI Suggestions */}
-        <div className="w-203 shrink-0 flex flex-col gap-3 overflow-hidden">
+        <div className="w-full flex flex-col gap-3 overflow-hidden">
           {/* Patient intake */}
           {meeting.patient_intake ? (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
