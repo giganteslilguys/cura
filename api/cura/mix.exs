@@ -35,16 +35,20 @@ defmodule Cura.MixProject do
       {:phoenix, "~> 1.8.5"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
-      {:postgrex, ">= 0.0.0"},
+{:waffle_ecto, "~> 0.0"},
+      {:waffle, "~> 1.1.10"},
+            {:postgrex, ">= 0.0.0"},
       {:swoosh, "~> 1.25"},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:waffle_ecto, "~> 0.0"},
-      {:waffle, "~> 1.1.10"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:httpoison, "~> 2.0"},
+      {:phoenix_live_view, "~> 1.0"},
+      {:phoenix_live_dashboard, "~> 0.8"},
+      {:phoenix_live_reload, "~> 1.2", only: :dev}
     ]
   end
 

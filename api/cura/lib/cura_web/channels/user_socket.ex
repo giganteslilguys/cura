@@ -3,6 +3,7 @@ defmodule CuraWeb.UserSocket do
   require Logger
 
   channel "room:*", CuraWeb.SignalChannel
+  channel "conversation:*", CuraWeb.ConversationChannel
 
   @impl true
   def connect(%{"token" => token}, socket, _connect_info) when is_binary(token) do

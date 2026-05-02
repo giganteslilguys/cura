@@ -20,6 +20,16 @@ if System.get_env("PHX_SERVER") do
   config :cura, CuraWeb.Endpoint, server: true
 end
 
+config :cura,
+       :gemini_api_key,
+       System.get_env("GEMINI_API_KEY") ||
+         raise("environment variable GEMINI_API_KEY is missing.")
+
+config :cura,
+       :openai_api_key,
+       System.get_env("OPENAI_API_KEY") ||
+         raise("environment variable OPENAI_API_KEY is missing.")
+
 config :cura, CuraWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 # CORS origins can be overridden at boot via env var (comma-separated).

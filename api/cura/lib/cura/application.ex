@@ -13,6 +13,7 @@ defmodule Cura.Application do
       {DNSCluster, query: Application.get_env(:cura, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Cura.PubSub},
       CuraWeb.Presence,
+      Cura.Conversation.RoomStore,
       CuraWeb.Endpoint
     ]
 

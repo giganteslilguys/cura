@@ -35,3 +35,13 @@ cura-*.tar
 npm-debug.log
 /assets/node_modules/
 
+# Nix BS
+.direnv/
+_build/
+../../_build/
+*.nix
+shell.nix
+
+# Audio Files
+*.mp3
+*.m4a
