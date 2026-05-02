@@ -27,8 +27,12 @@ config :cura,
 
 config :cura,
        :openai_api_key,
-       System.get_env("OPENAI_API_KEY") ||
-         raise("environment variable OPENAI_API_KEY is missing.")
+       System.get_env("OPENAI_API_KEY") || ""
+
+config :cura,
+       :elevenlabs_api_key,
+       System.get_env("ELEVENLABS_API_KEY") ||
+         raise("environment variable ELEVENLABS_API_KEY is missing.")
 
 config :cura, CuraWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

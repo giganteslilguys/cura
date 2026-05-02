@@ -14,6 +14,7 @@ defmodule Cura.Application do
       {Phoenix.PubSub, name: Cura.PubSub},
       CuraWeb.Presence,
       Cura.Conversation.RoomStore,
+      Cura.Conversation.Semaphore,
       CuraWeb.Endpoint
     ]
 

@@ -46,7 +46,6 @@ function getMeetingPhase(meeting: Meeting): MeetingPhase {
   const now = Date.now();
   const start = new Date(`${meeting.date}T${meeting.time}`).getTime();
   const end = start + meeting.duration * 60 * 1000;
-  if (now < start) return "pre";
   if (now >= end) return "post";
   return "active";
 }
@@ -551,13 +550,13 @@ function DoctorMeetingRoom({
               className="w-full h-full object-cover"
             />
 
-            {/* Patient placeholder when not connected */}
+            {/* Peer status badge */}
             {connState !== "connected" && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-                <div className="w-20 h-20 rounded-full bg-orange-600 flex items-center justify-center">
-                  <CameraIcon className="w-9 h-9 text-white" />
-                </div>
-                <span className="text-white text-sm font-medium">{patientName}</span>
+              <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1 pointer-events-none">
+                <span className="w-1.5 h-1.5 rounded-full bg-stone-400 animate-pulse" />
+                <span className="text-white/70 text-xs">
+                  {connState === "connecting" ? "Connecting…" : `Waiting for ${patientName}…`}
+                </span>
               </div>
             )}
 
@@ -788,15 +787,6 @@ function PatientMeetingRoom({
         className="absolute inset-0 w-full h-full object-cover"
       />
 
-      {/* Doctor placeholder when not connected */}
-      {!isConnected && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 pointer-events-none">
-          <div className="w-20 h-20 rounded-full bg-orange-600 flex items-center justify-center">
-            <CameraIcon className="w-9 h-9 text-white" />
-          </div>
-          <span className="text-white text-sm font-medium">{doctorName}</span>
-        </div>
-      )}
 
       {/* Top bar */}
       <div className="relative z-10 flex items-center justify-between px-5 py-4">
@@ -808,11 +798,7 @@ function PatientMeetingRoom({
             }`}
           />
           <span className="text-white/70 text-xs">
-            {isConnected
-              ? `Connected with ${doctorName}`
-              : connState === "waiting"
-              ? "Waiting for doctor…"
-              : "Connecting…"}
+            {isConnected ? `Connected with ${doctorName}` : "Waiting for doctor…"}
           </span>
         </div>
         {isConnected && (
