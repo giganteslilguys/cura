@@ -16,7 +16,9 @@ import type { Diagnosis, Meeting, Prescription, Suggestion, TranscriptEntry, Use
 import { RefObject, useEffect, useRef, useState } from 'react';
 
 import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
-import { getMeeting, getMeetingTranscript, saveVisitSummary, submitMeetingIntake, updateMeetingNotes } from '@/lib/api/meetings';
+import { completeMeeting, getMeeting, getMeetingTranscript, saveVisitSummary, submitMeetingIntake, updateMeetingNotes } from '@/lib/api/meetings';
+import { isSpeechFrame, MIN_CHUNK_BYTES, SPEECH_FRAMES_REQUIRED } from '@/lib/audio/vad';
+import { getOnSitePhase } from '@/lib/meeting/phase';
 import { useRouter } from 'next/navigation';
 
 const PC_CONFIG: RTCConfiguration = {
@@ -451,6 +453,26 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
 
   const endCall = () => router.push('/meetings');
 
+  // On-site visits skip the WebRTC + remote pipeline and only stream audio.
+  // Patients aren't expected to "join" — they're physically next to the doctor.
+  if (meeting.kind === 'on_site') {
+    if (!isDoctor) {
+      return <OnSiteNotForPatient onBack={endCall} />;
+    }
+    const onSitePhase = getOnSitePhase(meeting);
+    if (onSitePhase === 'post') {
+      return <DoctorPostMeetingView meeting={meeting} token={token} onBack={endCall} />;
+    }
+    return (
+      <OnSiteMeetingRoom
+        meeting={meeting}
+        token={token}
+        suggestions={suggestions}
+        onLeave={endCall}
+      />
+    );
+  }
+
   if (isDoctor) {
     if (phase === "post") {
       return <DoctorPostMeetingView meeting={meeting} token={token} onBack={endCall} />;
@@ -495,6 +517,353 @@ export function MeetingRoom({ meeting, currentUser, token }: Props) {
       onToggleVideo={toggleVideo}
       onEndCall={endCall}
     />
+  );
+}
+
+type LiveTranscriptItem = {
+  id: string;
+  speaker: 'doctor' | 'patient';
+  text: string;
+  time: string;
+};
+
+/**
+ * On-site visit room (doctor in the same physical room as the patient).
+ *
+ * No WebRTC, no video, no `room:` signaling channel — just the audio capture
+ * loop feeding Whisper through the conversation channel, plus the live
+ * transcript and clinical-hint streams that drive the SOAP-note prep.
+ */
+function OnSiteMeetingRoom({
+  meeting,
+  token,
+  suggestions,
+  onLeave,
+}: {
+  meeting: Meeting;
+  token: string;
+  suggestions: Suggestion[];
+  onLeave: () => void;
+}) {
+  const router = useRouter();
+  const conversationChannelRef = useRef<Channel | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const stopRecordingRef = useRef<(() => void) | null>(null);
+
+  const [muted, setMuted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<LiveTranscriptItem[]>([]);
+  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(new Set());
+  const [ending, setEnding] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const start = async () => {
+      let stream: MediaStream;
+      try {
+        // Audio-only — no camera prompt for on-site visits.
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+          video: false,
+        });
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof Error
+            ? `Could not access microphone: ${err.message}`
+            : 'Could not access microphone.',
+        );
+        return;
+      }
+      if (cancelled) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      localStreamRef.current = stream;
+
+      const socket = new Socket(`${PUBLIC_SOCKET_URL}/socket`, {
+        params: { token },
+      });
+      socket.connect();
+      socketRef.current = socket;
+
+      const convChannel = socket.channel(`conversation:${meeting.id}`);
+      conversationChannelRef.current = convChannel;
+
+      convChannel.on(
+        'transcript_update',
+        ({
+          text,
+          speaker,
+          timestamp,
+        }: {
+          text: string;
+          speaker: 'doctor' | 'patient';
+          timestamp: string;
+        }) => {
+          if (cancelled) return;
+          const time = new Date(timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          setTranscript((prev) => [
+            ...prev,
+            { id: `${prev.length}-${timestamp}`, speaker, text, time },
+          ]);
+        },
+      );
+
+      convChannel.join();
+
+      // Audio capture: same VAD-gated chunk loop as remote, but the only
+      // consumer is the conversation channel — there is no peer connection.
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      const audioStream = new MediaStream(stream.getAudioTracks());
+
+      const audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(audioStream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const freqData = new Uint8Array(analyser.frequencyBinCount);
+
+      let recorderActive = true;
+      let currentRecorder: MediaRecorder | null = null;
+
+      const cycleRecorder = () => {
+        if (!recorderActive) return;
+        const rec = new MediaRecorder(audioStream, { mimeType });
+        currentRecorder = rec;
+
+        let speechFrames = 0;
+        const vadInterval = setInterval(() => {
+          analyser.getByteFrequencyData(freqData);
+          if (isSpeechFrame(freqData)) speechFrames++;
+        }, 100);
+
+        rec.ondataavailable = async (e) => {
+          clearInterval(vadInterval);
+          if (
+            !recorderActive ||
+            speechFrames < SPEECH_FRAMES_REQUIRED ||
+            e.data.size < MIN_CHUNK_BYTES
+          )
+            return;
+          const buffer = await e.data.arrayBuffer();
+          const bytes = new Uint8Array(buffer);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++)
+            binary += String.fromCharCode(bytes[i]);
+          conversationChannelRef.current?.push('audio_chunk', {
+            audio: btoa(binary),
+          });
+        };
+
+        rec.onstop = () => {
+          if (recorderActive) cycleRecorder();
+        };
+        rec.start();
+        setTimeout(() => {
+          if (rec.state === 'recording') rec.stop();
+        }, 4000);
+      };
+
+      cycleRecorder();
+
+      stopRecordingRef.current = () => {
+        recorderActive = false;
+        currentRecorder?.stop();
+        audioCtx.close();
+      };
+    };
+
+    start();
+
+    return () => {
+      cancelled = true;
+      try {
+        stopRecordingRef.current?.();
+      } catch {}
+      try {
+        conversationChannelRef.current?.leave();
+      } catch {}
+      try {
+        socketRef.current?.disconnect();
+      } catch {}
+      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = null;
+    };
+  }, [meeting.id, token]);
+
+  const toggleMute = () => {
+    const audio = localStreamRef.current?.getAudioTracks()[0];
+    if (!audio) return;
+    audio.enabled = !audio.enabled;
+    setMuted(!audio.enabled);
+  };
+
+  const toggleSuggestion = (id: string) => {
+    setDoneSuggestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleEnd = async () => {
+    setEnding(true);
+    try {
+      await completeMeeting(meeting.id, token);
+      // Trigger a route refresh so the post-visit SOAP editor mounts with
+      // the now-completed meeting.
+      router.refresh();
+    } catch {
+      // Even if the API call fails, let the doctor leave — they can retry
+      // the SOAP submit later from the meetings list.
+      onLeave();
+    } finally {
+      setEnding(false);
+    }
+  };
+
+  const patientName = meeting.patient
+    ? `${meeting.patient.first_name} ${meeting.patient.last_name}`
+    : 'Patient';
+
+  return (
+    <div className="flex flex-col h-screen bg-stone-50 text-stone-900">
+      <header className="flex items-center gap-4 px-6 py-3 bg-white border-b border-stone-200 shrink-0">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white shrink-0">
+            <PersonIcon className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-semibold text-stone-900 truncate">{patientName}</p>
+            <p className="text-xs text-stone-400 truncate">
+              {meeting.title} · On-site visit
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={toggleMute}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              muted
+                ? 'bg-[#b5471b] text-white hover:opacity-90'
+                : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+            }`}
+          >
+            {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {muted ? 'Mic muted' : 'Mic on'}
+          </button>
+          <button
+            onClick={handleEnd}
+            disabled={ending}
+            className="px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity flex items-center gap-1.5"
+          >
+            <PhoneOff className="w-4 h-4" />
+            {ending ? 'Ending…' : 'End visit'}
+          </button>
+        </div>
+      </header>
+
+      <div className="flex flex-1 gap-4 p-4 overflow-hidden">
+        {/* Live transcript */}
+        <div className="flex-1 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden min-w-0">
+          <div className="px-5 pt-4 pb-3 border-b border-stone-100 shrink-0">
+            <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
+              Live transcript
+            </p>
+            <p className="text-xs text-stone-400 mt-0.5">
+              {transcript.length === 0
+                ? 'Listening for speech…'
+                : `${transcript.length} segment${transcript.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {error && (
+              <p className="text-sm text-[#b5471b]">{error}</p>
+            )}
+            {transcript.length === 0 && !error && (
+              <p className="text-sm text-stone-400 italic">
+                The transcript will appear here as the visit unfolds.
+              </p>
+            )}
+            {transcript.map((entry) => (
+              <div key={entry.id} className="flex flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-stone-400 w-10 shrink-0">
+                    {entry.time}
+                  </span>
+                  <span
+                    className={`text-[10px] font-semibold uppercase tracking-wide ${
+                      entry.speaker === 'doctor' ? 'text-orange-500' : 'text-blue-500'
+                    }`}
+                  >
+                    {entry.speaker === 'doctor' ? 'MD' : 'Pt'}
+                  </span>
+                </div>
+                <p className="text-sm text-stone-800 leading-relaxed pl-12">
+                  {entry.text}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* AI suggestions */}
+        <div className="w-80 shrink-0 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden">
+          <div className="px-5 pt-4 pb-3 border-b border-stone-100 shrink-0">
+            <div className="flex items-center gap-2">
+              <SparkleIcon className="w-4 h-4 text-orange-500 shrink-0" />
+              <p className="text-sm font-semibold text-stone-900">Clinical Hints</p>
+            </div>
+            <p className="text-xs text-stone-400 mt-0.5 ml-6">
+              Live suggestions as the visit unfolds
+            </p>
+          </div>
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {suggestions.length === 0 ? (
+              <p className="text-xs text-stone-400 italic">
+                Suggestions will appear as the conversation progresses.
+              </p>
+            ) : (
+              suggestions.map((suggestion) => (
+                <SuggestionCard
+                  key={suggestion.id}
+                  suggestion={suggestion}
+                  done={doneSuggestions.has(suggestion.id)}
+                  onToggle={() => toggleSuggestion(suggestion.id)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OnSiteNotForPatient({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-stone-50 text-stone-900 px-6 text-center gap-4">
+      <p className="text-xl font-semibold">On-site visit</p>
+      <p className="text-sm text-stone-500 max-w-md">
+        This is an on-site visit — your doctor is recording it in person. There&apos;s
+        nothing to do here.
+      </p>
+      <button
+        onClick={onBack}
+        className="px-5 py-2 rounded-full bg-[#b5471b] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+      >
+        Back to appointments
+      </button>
+    </div>
   );
 }
 

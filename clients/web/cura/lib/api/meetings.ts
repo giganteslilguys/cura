@@ -64,3 +64,38 @@ export function getMeetingTranscript(
     cache: "no-store",
   });
 }
+
+export type CreateOnSiteInput = {
+  patient_email: string;
+  title?: string;
+  duration?: number;
+};
+
+/**
+ * Starts an ad-hoc on-site visit. The backend resolves the patient by email,
+ * sets `kind: "on_site"`, and stamps the start to "now".
+ */
+export function createOnSiteMeeting(
+  input: CreateOnSiteInput,
+  token: string,
+): Promise<{ meeting: Meeting }> {
+  return apiFetch<{ meeting: Meeting }>("/api/meetings/on_site", {
+    method: "POST",
+    body: input,
+    token,
+  });
+}
+
+/**
+ * Marks the meeting as completed — used to end an on-site visit so the view
+ * transitions into the post-meeting SOAP-note editor.
+ */
+export function completeMeeting(
+  id: string,
+  token: string,
+): Promise<{ meeting: Meeting }> {
+  return apiFetch<{ meeting: Meeting }>(`/api/meetings/${id}/complete`, {
+    method: "PATCH",
+    token,
+  });
+}

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import type { Meeting } from "@/lib/api/types";
 
-import { getMeetingPhase, getTimeUntilStart } from "./phase";
+import { getMeetingPhase, getOnSitePhase, getTimeUntilStart } from "./phase";
 
 function meeting(overrides: Partial<Meeting> = {}): Meeting {
   return {
@@ -13,6 +13,7 @@ function meeting(overrides: Partial<Meeting> = {}): Meeting {
     duration: 30,
     notes: null,
     timezone: "UTC",
+    kind: "remote",
     status: "scheduled",
     doctor: null,
     patient: null,
@@ -64,6 +65,42 @@ describe("getMeetingPhase", () => {
   it("treats a 'scheduled' status during the window as active", () => {
     expect(
       getMeetingPhase(meeting({ status: "scheduled" }), start + 5 * minute),
+    ).toBe("active");
+  });
+});
+
+describe("getOnSitePhase", () => {
+  it("returns 'active' for a freshly-created on-site meeting", () => {
+    expect(getOnSitePhase(meeting({ kind: "on_site" }))).toBe("active");
+  });
+
+  it("returns 'post' once the meeting is completed", () => {
+    expect(
+      getOnSitePhase(meeting({ kind: "on_site", status: "completed" })),
+    ).toBe("post");
+  });
+
+  it("returns 'post' for canceled or rejected on-site meetings", () => {
+    expect(
+      getOnSitePhase(meeting({ kind: "on_site", status: "canceled" })),
+    ).toBe("post");
+    expect(
+      getOnSitePhase(meeting({ kind: "on_site", status: "rejected" })),
+    ).toBe("post");
+  });
+
+  it("ignores the clock — even far-past schedules stay active until completed", () => {
+    // Hour-old start time would push remote into 'post', but on-site only
+    // cares about status.
+    expect(
+      getOnSitePhase(
+        meeting({
+          kind: "on_site",
+          date: "2000-01-01",
+          time: "00:00:00",
+          duration: 30,
+        }),
+      ),
     ).toBe("active");
   });
 });

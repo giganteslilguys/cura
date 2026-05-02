@@ -44,6 +44,8 @@ export type FieldErrors = Record<string, string[]>;
 
 export type MeetingStatus = "scheduled" | "completed" | "canceled" | "rejected";
 
+export type MeetingKind = "remote" | "on_site";
+
 export type PatientIntake = {
   reason: string;
   symptoms: string | null;
@@ -109,6 +111,7 @@ export type Meeting = {
   duration: number;
   notes: string | null;
   timezone: string;
+  kind: MeetingKind;
   status: MeetingStatus;
   doctor: User | null;
   patient: User | null;

@@ -30,6 +30,20 @@ function startMs(meeting: Meeting): number {
 }
 
 /**
+ * Phase resolver for on-site visits.
+ *
+ * On-site meetings start the moment the doctor creates them and end when the
+ * doctor explicitly completes them. The clock-based windowing used for
+ * remote meetings doesn't apply, so we look at status only: terminal
+ * statuses map to "post" and everything else is "active".
+ *
+ * Returned as the same `MeetingPhase` so call sites can branch uniformly.
+ */
+export function getOnSitePhase(meeting: Meeting): MeetingPhase {
+  return TERMINAL_STATUSES.has(meeting.status) ? "post" : "active";
+}
+
+/**
  * Human-friendly countdown until the meeting starts. Returns `null` once the
  * meeting is underway. Used for the patient "waiting room" view.
  */
