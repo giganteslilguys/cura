@@ -42,14 +42,9 @@ export function Nav({
             'linear-gradient(160deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.10) 100%)',
           backdropFilter: 'blur(52px) saturate(180%) brightness(1.05)',
           WebkitBackdropFilter: 'blur(52px) saturate(180%) brightness(1.05)',
-          border: '1px solid rgba(255,255,255,0.55)',
-          boxShadow: [
-            'inset 0 1.5px 0 rgba(255,255,255,0.90)',
-            'inset 0 -1px 0 rgba(0,0,0,0.04)',
-            'inset 1px 0 0 rgba(255,255,255,0.30)',
-            '0 12px 48px rgba(0,0,0,0.09)',
-            '0 2px 8px rgba(0,0,0,0.05)',
-          ].join(', '),
+          border: '2px solid rgba(255,255,255,.3)',
+          boxShadow:
+            'inset 0 1px 0 rgba(255,255,255,0.85), 0 6px 14px rgba(0,0,0,0.08)',
         }}
       >
         <Image
