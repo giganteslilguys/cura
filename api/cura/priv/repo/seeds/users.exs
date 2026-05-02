@@ -7,16 +7,16 @@ defmodule Cura.Repo.Seeds.Accounts do
   @sexes [:male, :female, :other]
 
   @medications [
-    %{name: "Lisinopril", dose: "10mg", frequency: "daily"},
-    %{name: "Metformin", dose: "500mg", frequency: "twice daily"},
-    %{name: "Atorvastatin", dose: "20mg", frequency: "daily at night"},
-    %{name: "Levothyroxine", dose: "50mcg", frequency: "daily before breakfast"},
-    %{name: "Amlodipine", dose: "5mg", frequency: "daily"},
-    %{name: "Omeprazole", dose: "20mg", frequency: "daily"},
-    %{name: "Salbutamol", dose: "100mcg", frequency: "as needed"},
-    %{name: "Sertraline", dose: "50mg", frequency: "daily"},
-    %{name: "Ibuprofen", dose: "400mg", frequency: "as needed"},
-    %{name: "Warfarin", dose: "5mg", frequency: "daily"}
+    %{name: "Lisinopril", dose: "10mg", frequency: "diariamente"},
+    %{name: "Metformin", dose: "500mg", frequency: "duas vezes ao dia"},
+    %{name: "Atorvastatin", dose: "20mg", frequency: "à noite"},
+    %{name: "Levothyroxine", dose: "50mcg", frequency: "antes do café da manhã"},
+    %{name: "Amlodipine", dose: "5mg", frequency: "diariamente"},
+    %{name: "Omeprazole", dose: "20mg", frequency: "diariamente"},
+    %{name: "Salbutamol", dose: "100mcg", frequency: "conforme necessário"},
+    %{name: "Sertraline", dose: "50mg", frequency: "diariamente"},
+    %{name: "Ibuprofen", dose: "400mg", frequency: "conforme necessário"},
+    %{name: "Warfarin", dose: "5mg", frequency: "diariamente"}
   ]
 
   @allergies [
@@ -32,17 +32,15 @@ defmodule Cura.Repo.Seeds.Accounts do
   ]
 
   @conditions [
-    "Hypertension",
-    "Type 2 Diabetes",
-    "Asthma",
-    "Hypothyroidism",
+    "Hipertensão",
+    "Diabetes Tipo 2",
+    "Asma",
+    "Hipotireoidismo",
     "Hyperlipidemia",
-    "Osteoarthritis",
-    "GERD",
-    "Anxiety",
-    "Depression",
-    "Migraine",
-    "Atrial Fibrillation",
+    "Osteoporose",
+    "Ansiedade",
+    "Depressao",
+    "Enxaqueca",
     "COPD"
   ]
 
