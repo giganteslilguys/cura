@@ -472,7 +472,6 @@ export function MeetingRoom({ meeting, currentUser, token, forceReport }: Props)
       <OnSiteMeetingRoom
         meeting={meeting}
         token={token}
-        suggestions={suggestions}
         onLeave={endCall}
       />
     );
@@ -542,12 +541,10 @@ type LiveTranscriptItem = {
 function OnSiteMeetingRoom({
   meeting,
   token,
-  suggestions,
   onLeave,
 }: {
   meeting: Meeting;
   token: string;
-  suggestions: Suggestion[];
   onLeave: () => void;
 }) {
   const router = useRouter();
@@ -559,6 +556,9 @@ function OnSiteMeetingRoom({
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<LiveTranscriptItem[]>([]);
+  // On-site visits don't share state with the parent (the parent's effect
+  // early-returns for kind: "on_site"), so suggestions are tracked locally.
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(new Set());
   const [ending, setEnding] = useState(false);
 
@@ -617,6 +617,22 @@ function OnSiteMeetingRoom({
             ...prev,
             { id: `${prev.length}-${timestamp}`, speaker, text, time },
           ]);
+        },
+      );
+
+      // Live AI clinical hints. Backend dedupes against prior items before
+      // broadcasting; we still guard locally in case the user rejoins and the
+      // backend replays the buffer.
+      convChannel.on(
+        'suggestions_update',
+        ({ suggestions: incoming }: { suggestions: Suggestion[] }) => {
+          if (cancelled || !Array.isArray(incoming) || incoming.length === 0)
+            return;
+          setSuggestions((prev) => {
+            const seen = new Set(prev.map((s) => s.id));
+            const fresh = incoming.filter((s) => !seen.has(s.id));
+            return fresh.length === 0 ? prev : [...prev, ...fresh];
+          });
         },
       );
 
