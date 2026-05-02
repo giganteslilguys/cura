@@ -44,9 +44,13 @@ export default async function MeetingsPage() {
                     </span>
                   )}
                   {user.role === 'doctor' && m.patient && (
-                    <span className="text-xs text-black/40">
+                    <Link
+                      href={`/meetings/${m.id}/patient`}
+                      className="text-xs text-black/40 hover:text-[#b5471b] transition-colors w-fit flex items-center gap-1"
+                    >
                       {m.patient.first_name} {m.patient.last_name}
-                    </span>
+                      <svg className="w-3 h-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+                    </Link>
                   )}
                   <span className="text-sm text-black/40 flex items-center gap-2.5">
                     <span className="flex items-center gap-1">

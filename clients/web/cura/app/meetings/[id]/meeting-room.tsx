@@ -724,11 +724,11 @@ function DoctorMeetingRoom({
               <div className="flex items-center gap-2 mb-0.5">
                 <SparkleIcon className="w-4 h-4 text-orange-500 shrink-0" />
                 <h2 className="font-semibold text-stone-900 text-sm">
-                  AI Suggestions
+                  Clinical Hints
                 </h2>
               </div>
               <p className="text-xs text-stone-400 ml-6">
-                Real-time guidance during your visit
+                Live suggestions as the visit unfolds
               </p>
             </div>
 
