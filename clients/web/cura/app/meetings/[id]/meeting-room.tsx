@@ -7,6 +7,8 @@ import {
   Mic,
   MicOff,
   PhoneOff,
+  Save,
+  Send,
   Sparkles,
   Video,
   VideoOff,
@@ -37,6 +39,7 @@ import {
   updateMeetingNotes,
 } from '@/lib/api/meetings';
 
+import Image from 'next/image';
 import { Nav } from '@/components/nav';
 import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
 import { getOnSitePhase } from '@/lib/meeting/phase';
@@ -1187,12 +1190,49 @@ function DoctorPostMeetingView({
             <span className="text-xs text-black/40 shrink-0">{dateStr}</span>
           </div>
         }
+        mobileCenter={!submitted ? (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleGenerate}
+              disabled={generating || saving}
+              title="Gerar rascunho"
+              className={`w-9 h-9 rounded-full flex items-center justify-center border border-orange-300 text-orange-600 disabled:opacity-40 transition-colors ${generating ? 'cura-ai-shimmer' : 'hover:bg-orange-50'}`}
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleSave(false)}
+              disabled={saving || generating}
+              title="Guardar rascunho"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-black/[0.06] text-stone-600 disabled:opacity-40 hover:bg-black/10 transition-colors"
+            >
+              <Save className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => handleSave(true)}
+              disabled={saving || generating}
+              title="Submeter e finalizar"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-[#b5471b] text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        ) : undefined}
       />
-      <div className="h-26 shrink-0" />
+      <div className="hidden md:block h-26 shrink-0" />
 
-      <div className="flex flex-1 gap-4 p-4 overflow-hidden">
-        {/* Left: Transcript */}
-        <div className="w-64 shrink-0 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 gap-4 p-4 pb-48 md:pb-4 overflow-y-auto md:overflow-hidden">
+        {/* Back link — mobile only */}
+        <button
+          onClick={onBack}
+          className="md:hidden self-start flex items-center gap-1.5 text-sm text-black/40 hover:text-black/70 transition-colors mb-1"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M5 12l7 7M5 12l7-7"/></svg>
+          Voltar às consultas
+        </button>
+
+        {/* Left: Transcript — hidden on mobile */}
+        <div className="hidden md:flex w-64 shrink-0 flex-col bg-white rounded-xl border border-stone-200 overflow-hidden">
           <div className="px-4 pt-4 pb-3 border-b border-stone-100 shrink-0">
             <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
               Transcrição da Consulta
@@ -1244,9 +1284,9 @@ function DoctorPostMeetingView({
         </div>
 
         {/* Center: Visit Summary form */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 md:overflow-hidden">
           <div
-            className={`flex-1 bg-white rounded-xl border border-stone-200 flex flex-col overflow-hidden ${generating ? 'cura-ai-pending' : ''}`}
+            className={`bg-white rounded-xl border border-stone-200 flex flex-col md:flex-1 md:overflow-hidden ${generating ? 'cura-ai-pending' : ''}`}
           >
             <div className="px-6 pt-5 pb-4 border-b border-stone-100 shrink-0 relative">
               <div className="flex items-center gap-2">
@@ -1270,7 +1310,7 @@ function DoctorPostMeetingView({
             </div>
 
             <div
-              className={`flex-1 overflow-y-auto px-6 py-5 space-y-6 transition-opacity duration-300 ${generating ? 'opacity-60' : 'opacity-100'}`}
+              className={`px-6 py-5 space-y-6 transition-opacity duration-300 md:flex-1 md:overflow-y-auto ${generating ? 'opacity-60' : 'opacity-100'}`}
             >
               {/* Vitals */}
               <FormSection
@@ -1629,7 +1669,8 @@ function DoctorPostMeetingView({
                 {saveError && (
                   <p className="text-sm text-red-500 mb-3">{saveError}</p>
                 )}
-                <div className="flex items-center gap-3 flex-wrap">
+                {/* Desktop: single row */}
+                <div className="hidden md:flex items-center gap-3 flex-wrap">
                   <button
                     onClick={onBack}
                     className="px-5 py-2.5 text-stone-500 hover:text-stone-900 rounded-full text-sm font-medium transition-colors border border-stone-200 bg-white"
@@ -1668,7 +1709,7 @@ function DoctorPostMeetingView({
         </div>
 
         {/* Right: Patient context */}
-        <aside className="w-60 shrink-0 flex flex-col gap-3 overflow-y-auto">
+        <aside className="w-full md:w-60 shrink-0 flex flex-col gap-3">
           {meeting.patient_intake ? (
             <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col gap-3 shrink-0">
               <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
@@ -1788,6 +1829,7 @@ function DoctorPostMeetingView({
           )}
         </aside>
       </div>
+
     </div>
   );
 }
@@ -1902,21 +1944,23 @@ function DoctorMeetingRoom({
       className="flex flex-col h-screen text-black"
       style={{ background: '#ffffff' }}
     >
-      <Nav
-        user={currentUser}
-        token={token}
-        wide
-        center={
-          <div className="flex items-end justify-end w-full gap-2 min-w-0">
-            <button
-              onClick={onEndCall}
-              className="px-3 py-3.5 rounded-full max-h-5 bg-[#b5471b] text-white text-xs% font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
-            >
-              <DoorOpen className="w-4 h-4" /> Terminar
-            </button>
-          </div>
-        }
-      />
+      <div className="hidden md:block">
+        <Nav
+          user={currentUser}
+          token={token}
+          wide
+          center={
+            <div className="flex items-end justify-end w-full gap-2 min-w-0">
+              <button
+                onClick={onEndCall}
+                className="px-3 py-3.5 rounded-full max-h-5 bg-[#b5471b] text-white text-xs% font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
+              >
+                <DoorOpen className="w-4 h-4" /> Terminar
+              </button>
+            </div>
+          }
+        />
+      </div>
       <div className="h-26 shrink-0" />
 
       {/* Main */}
@@ -2247,27 +2291,22 @@ function PatientMeetingRoom({
         </div>
       )}
 
-      {/* Standard nav */}
-      <Nav
-        user={currentUser}
-        token={token}
-        wide
-        center={
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-medium text-sm text-white/80 truncate">
-              {doctorName}
-            </span>
-            <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
-            <span className="text-xs text-white/50 shrink-0">
-              {isConnected ? formatElapsed(elapsedSeconds) : 'A ligar…'}
-            </span>
-          </div>
-        }
-      />
+      {/* Top bar: logo left, center info, nothing right */}
+      <div className="absolute top-5 left-0 right-0 z-10 flex items-center px-6">
+        <Image src="/cura.svg" alt="Cura" width={42} height={11} priority className="opacity-60" />
+        <div className="flex-1 flex items-center justify-center gap-2">
+          <span className="font-medium text-sm text-white/80">{doctorName}</span>
+          <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
+          <span className="text-xs text-white/50">
+            {isConnected ? formatElapsed(elapsedSeconds) : 'A ligar…'}
+          </span>
+        </div>
+        <div className="w-[42px]" />
+      </div>
 
       {/* Transcription notice */}
-      <div className="relative z-10 flex justify-center mt-3">
-        <p className="text-white/25 text-xs italic">
+      <div className="absolute top-14 left-0 right-0 z-10 flex justify-center">
+        <p className="text-white/20 text-xs italic">
           Esta consulta está a ser transcrita de forma segura.
         </p>
       </div>

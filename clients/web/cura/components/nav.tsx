@@ -11,12 +11,14 @@ export function Nav({
   token,
   right,
   center,
+  mobileCenter,
   wide,
 }: {
   user?: User;
   token?: string;
   right?: React.ReactNode;
   center?: React.ReactNode;
+  mobileCenter?: React.ReactNode;
   wide?: boolean;
 }) {
   const router = useRouter();
@@ -33,7 +35,7 @@ export function Nav({
 
   return (
     <div
-      className={`fixed top-5 left-1/2 mb-4 -translate-x-1/2 z-50 pointer-events-none ${wide ? 'w-[calc(100%-3rem)]' : 'w-3/4 max-w-2xl'}`}
+      className={`absolute bottom-[calc(env(safe-area-inset-bottom,0px)+2.5rem)] left-1/2 -translate-x-1/2 z-50 pointer-events-none md:fixed md:top-5 md:bottom-auto ${wide ? 'w-[calc(100%-3rem)]' : 'w-3/4 max-w-2xl'}`}
     >
       <div
         className="pointer-events-auto rounded-full px-6 py-3.5 min-h-14.5 flex items-center justify-between gap-4"
@@ -55,22 +57,29 @@ export function Nav({
           priority
           className="shrink-0"
         />
+        {mobileCenter && (
+          <div className="flex md:hidden flex-1 items-center justify-center gap-2">
+            {mobileCenter}
+          </div>
+        )}
         {center && (
-          <div className="flex-1 flex items-center justify-center min-w-0">
+          <div className="hidden md:flex flex-1 items-center justify-center min-w-0">
             {center}
           </div>
         )}
-        {user && token ? (
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 text-sm text-black/40 transition-colors duration-200 hover:text-[#b5471b] hover:scale-102"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair
-          </button>
-        ) : (
-          right
-        )}
+        <div>
+          {user && token ? (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-sm text-black/40 transition-colors duration-200 hover:text-[#b5471b] hover:scale-102"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
+            </button>
+          ) : (
+            right
+          )}
+        </div>
       </div>
     </div>
   );
