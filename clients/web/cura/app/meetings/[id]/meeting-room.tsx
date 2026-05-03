@@ -601,6 +601,61 @@ type LiveTranscriptItem = {
   time: string;
 };
 
+const BAR_COUNT = 28;
+
+function AudioWave({ analyserRef, muted }: { analyserRef: React.RefObject<AnalyserNode | null>; muted: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let rafId: number;
+
+    const draw = () => {
+      const { width, height } = canvas;
+      ctx.clearRect(0, 0, width, height);
+
+      const analyser = analyserRef.current;
+      const data = new Uint8Array(BAR_COUNT);
+      if (analyser && !muted) {
+        analyser.getByteFrequencyData(data);
+      }
+
+      const gap = 3;
+      const barW = (width - gap * (BAR_COUNT - 1)) / BAR_COUNT;
+
+      for (let i = 0; i < BAR_COUNT; i++) {
+        const level = muted ? 0 : data[i] / 255;
+        const barH = Math.max(3, level * height);
+        const x = i * (barW + gap);
+        const y = (height - barH) / 2;
+        const alpha = 0.25 + level * 0.75;
+        ctx.fillStyle = `rgba(181,71,27,${alpha})`;
+        ctx.beginPath();
+        ctx.roundRect(x, y, barW, barH, 2);
+        ctx.fill();
+      }
+
+      rafId = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => cancelAnimationFrame(rafId);
+  }, [analyserRef, muted]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={300}
+      height={56}
+      className="w-full h-14"
+    />
+  );
+}
+
 /**
  * On-site visit room (doctor in the same physical room as the patient).
  *
@@ -625,6 +680,7 @@ function OnSiteMeetingRoom({
   const localStreamRef = useRef<MediaStream | null>(null);
   const stopRecordingRef = useRef<(() => void) | null>(null);
 
+  const analyserRef = useRef<AnalyserNode | null>(null);
   const [muted, setMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<LiveTranscriptItem[]>([]);
@@ -724,6 +780,7 @@ function OnSiteMeetingRoom({
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
+      analyserRef.current = analyser;
       const freqData = new Uint8Array(analyser.frequencyBinCount);
 
       let recorderActive = true;
@@ -791,6 +848,7 @@ function OnSiteMeetingRoom({
       } catch {}
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
+      analyserRef.current = null;
     };
   }, [meeting.id, token]);
 
@@ -838,38 +896,49 @@ function OnSiteMeetingRoom({
         wide
         center={
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-medium text-sm text-black/70 truncate">
-              {patientName}
-            </span>
+            <span className="font-medium text-sm text-black/70 truncate">{patientName}</span>
             <span className="w-1 h-1 rounded-full bg-black/20 shrink-0" />
-            <span className="text-xs text-black/40 shrink-0">
-              Consulta presencial
-            </span>
+            <span className="text-xs text-black/40 shrink-0">Consulta presencial</span>
+          </div>
+        }
+        mobileCenter={
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleMute}
+              title={muted ? 'Ativar microfone' : 'Silenciar'}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+                muted ? 'bg-[#b5471b] text-white' : 'bg-black/[0.06] text-stone-600 hover:bg-black/10'
+              }`}
+            >
+              {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={handleEnd}
+              disabled={ending}
+              title="Terminar consulta"
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-[#b5471b] text-white disabled:opacity-50 hover:opacity-90 transition-opacity"
+            >
+              <PhoneOff className="w-4 h-4" />
+            </button>
           </div>
         }
       />
-      <div className="h-26 shrink-0" />
-      <div className="flex items-center justify-between px-6 pb-3 shrink-0">
+
+      {/* Desktop-only spacer + header row */}
+      <div className="hidden md:block h-26 shrink-0" />
+      <div className="hidden md:flex items-center justify-between px-6 pb-3 shrink-0">
         <div>
           <p className="font-semibold text-stone-900 text-sm">{patientName}</p>
-          <p className="text-xs text-stone-400">
-            {meeting.title} · Consulta presencial
-          </p>
+          <p className="text-xs text-stone-400">{meeting.title} · Consulta presencial</p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={toggleMute}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              muted
-                ? 'bg-[#b5471b] text-white hover:opacity-90'
-                : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              muted ? 'bg-[#b5471b] text-white hover:opacity-90' : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
             }`}
           >
-            {muted ? (
-              <MicOff className="w-4 h-4" />
-            ) : (
-              <Mic className="w-4 h-4" />
-            )}
+            {muted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             {muted ? 'Microfone em silêncio' : 'Microfone ativo'}
           </button>
           <button
@@ -883,68 +952,53 @@ function OnSiteMeetingRoom({
         </div>
       </div>
 
-      <div className="flex flex-1 gap-4 px-4 pb-4 overflow-hidden">
-        {/* Live transcript */}
-        <div className="flex-1 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden min-w-0">
+      <div className="flex flex-1 gap-4 px-4 pb-4 md:overflow-hidden overflow-y-auto pb-36 md:pb-4">
+        {/* Live transcript — desktop only */}
+        <div className="hidden md:flex flex-1 flex-col bg-white rounded-xl border border-stone-200 overflow-hidden min-w-0">
           <div className="px-5 pt-4 pb-3 border-b border-stone-100 shrink-0">
-            <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">
-              Transcrição ao vivo
-            </p>
+            <p className="text-xs font-semibold tracking-widest text-stone-400 uppercase">Transcrição ao vivo</p>
             <p className="text-xs text-stone-400 mt-0.5">
-              {transcript.length === 0
-                ? 'A aguardar fala…'
-                : `${transcript.length} ${transcript.length === 1 ? 'segmento' : 'segmentos'}`}
+              {transcript.length === 0 ? 'A aguardar fala…' : `${transcript.length} ${transcript.length === 1 ? 'segmento' : 'segmentos'}`}
             </p>
           </div>
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
             {error && <p className="text-sm text-[#b5471b]">{error}</p>}
             {transcript.length === 0 && !error && (
-              <p className="text-sm text-stone-400 italic">
-                A transcrição aparecerá aqui à medida que a consulta decorre.
-              </p>
+              <p className="text-sm text-stone-400 italic">A transcrição aparecerá aqui à medida que a consulta decorre.</p>
             )}
             {transcript.map((entry) => (
               <div key={entry.id} className="flex flex-col gap-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-stone-400 w-10 shrink-0">
-                    {entry.time}
-                  </span>
-                  <span
-                    className={`text-[10px] font-semibold uppercase tracking-wide ${
-                      entry.speaker === 'doctor'
-                        ? 'text-orange-500'
-                        : 'text-blue-500'
-                    }`}
-                  >
+                  <span className="text-[10px] font-mono text-stone-400 w-10 shrink-0">{entry.time}</span>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wide ${entry.speaker === 'doctor' ? 'text-orange-500' : 'text-blue-500'}`}>
                     {entry.speaker === 'doctor' ? 'MD' : 'Pt'}
                   </span>
                 </div>
-                <p className="text-sm text-stone-800 leading-relaxed pl-12">
-                  {entry.text}
-                </p>
+                <p className="text-sm text-stone-800 leading-relaxed pl-12">{entry.text}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* AI suggestions */}
-        <div className="w-80 shrink-0 flex flex-col bg-white rounded-xl border border-stone-200 overflow-hidden">
+        {/* AI suggestions — full width on mobile */}
+        <div className="w-full md:w-80 shrink-0 flex flex-col bg-white rounded-xl border border-stone-200 md:overflow-hidden">
           <div className="px-5 pt-4 pb-3 border-b border-stone-100 shrink-0">
             <div className="flex items-center gap-2">
               <SparkleIcon className="w-4 h-4 text-orange-500 shrink-0" />
-              <p className="text-sm font-semibold text-stone-900">
-                Sugestões Clínicas
-              </p>
+              <p className="text-sm font-semibold text-stone-900">Sugestões Clínicas</p>
             </div>
-            <p className="text-xs text-stone-400 mt-0.5 ml-6">
-              Sugestões em tempo real à medida que a consulta decorre
-            </p>
+            <p className="text-xs text-stone-400 mt-0.5 ml-6">Sugestões em tempo real à medida que a consulta decorre</p>
           </div>
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          {/* Audio visualizer — mobile only */}
+          <div className="md:hidden px-4 pt-3 pb-1 border-b border-stone-100">
+            {error
+              ? <p className="text-xs text-[#b5471b] py-2">{error}</p>
+              : <AudioWave analyserRef={analyserRef} muted={muted} />
+            }
+          </div>
+          <div className="flex-1 md:overflow-y-auto px-5 py-4 space-y-3">
             {suggestions.length === 0 ? (
-              <p className="text-xs text-stone-400 italic">
-                As sugestões aparecerão à medida que a conversa progride.
-              </p>
+              <p className="text-xs text-stone-400 italic">As sugestões aparecerão à medida que a conversa progride.</p>
             ) : (
               suggestions.map((suggestion) => (
                 <SuggestionCard
@@ -1912,11 +1966,31 @@ function DoctorMeetingRoom({
   onToggleVideo: () => void;
   onEndCall: () => void;
 }) {
-  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(
-    new Set(),
-  );
+  const [doneSuggestions, setDoneSuggestions] = useState<Set<string>>(new Set());
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
   const [doctorNotes, setDoctorNotes] = useState(meeting.notes ?? '');
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  useEffect(() => {
+    if (connState !== 'connected') return;
+    const timer = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, [connState]);
+
+  const formatElapsed = (secs: number) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   const handleNotesChange = (value: string) => {
     setDoctorNotes(value);
@@ -1939,28 +2013,160 @@ function DoctorMeetingRoom({
     ? `${patient.first_name} ${patient.last_name}`
     : 'Doente';
 
+  // Mobile: full-screen video layout (mirrors PatientMeetingRoom)
+  if (isMobile) {
+    const isConnected = connState === 'connected';
+    return (
+      <div className="relative flex flex-col h-screen bg-black text-white overflow-hidden">
+        {/* Remote video fills the screen */}
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+
+        {/* Placeholder when not connected */}
+        {!isConnected && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+            <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+              <Camera className="w-7 h-7 text-white/30" />
+            </div>
+            <span className="text-white/40 text-sm">{patientName}</span>
+          </div>
+        )}
+
+        {/* Top bar: logo left, name + timer center, spacer right */}
+        <div className="absolute top-5 left-0 right-0 z-10 flex items-center px-6">
+          <Image src="/cura.svg" alt="Cura" width={42} height={11} priority className="opacity-60 shrink-0" />
+          <div className="flex-1 flex items-center justify-center gap-2">
+            <span className="font-medium text-sm text-white/80">{patientName}</span>
+            <span className="w-1 h-1 rounded-full bg-white/30 shrink-0" />
+            <span className="text-xs text-white/50">
+              {isConnected ? formatElapsed(elapsedSeconds) : 'A ligar…'}
+            </span>
+          </div>
+          <div className="w-[42px]" />
+        </div>
+
+        {/* Suggestions overlay */}
+        {showSuggestions && (
+          <div className="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-12 pb-3 shrink-0">
+              <div className="flex items-center gap-2">
+                <SparkleIcon className="w-4 h-4 text-orange-400 shrink-0" />
+                <span className="font-semibold text-sm text-white">Sugestões Clínicas</span>
+              </div>
+              <button
+                onClick={() => setShowSuggestions(false)}
+                className="text-white/40 hover:text-white/80 transition-colors p-1"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 pb-32 space-y-3">
+              {suggestions.length === 0 ? (
+                <p className="text-xs text-white/40 italic">As sugestões aparecerão à medida que a conversa avança.</p>
+              ) : (
+                suggestions.map((suggestion) => (
+                  <SuggestionCard
+                    key={suggestion.id}
+                    suggestion={suggestion}
+                    done={doneSuggestions.has(suggestion.id)}
+                    onToggle={() => toggleSuggestion(suggestion.id)}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Self-view PiP */}
+        <div className="absolute bottom-28 right-5 z-10 w-28 h-20 rounded-2xl overflow-hidden border border-white/10">
+          <video
+            ref={localVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full h-full object-cover scale-x-[-1]"
+          />
+          {videoOff && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+              <CameraOff className="w-4 h-4 text-white/30" />
+            </div>
+          )}
+        </div>
+
+        {/* Controls glass capsule at bottom */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
+          <div className="flex items-center gap-3 bg-black/25 backdrop-blur-xl rounded-full px-5 py-3 border border-white/10 shadow-[0_8px_40px_rgba(0,0,0,0.4)]">
+            <button
+              onClick={onToggleMute}
+              aria-label={muted ? 'Ativar microfone' : 'Silenciar'}
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                muted ? 'bg-[#b5471b] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
+            >
+              {muted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={onToggleVideo}
+              aria-label={videoOff ? 'Ligar câmara' : 'Desligar câmara'}
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                videoOff ? 'bg-[#b5471b] text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
+            >
+              {videoOff ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => setShowSuggestions((v) => !v)}
+              aria-label="Sugestões clínicas"
+              className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                showSuggestions ? 'bg-orange-500 text-white' : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
+            >
+              <Sparkles className="w-5 h-5" />
+            </button>
+            <button
+              onClick={onEndCall}
+              aria-label="Terminar consulta"
+              className="w-11 h-11 rounded-full bg-[#b5471b] hover:opacity-90 flex items-center justify-center text-white transition-opacity cursor-pointer"
+            >
+              <DoorOpen className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="absolute bottom-0 left-0 right-0 z-30 px-6 py-3 bg-black/60 backdrop-blur-sm text-sm text-white/60">
+            {error}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Desktop layout
   return (
     <div
       className="flex flex-col h-screen text-black"
       style={{ background: '#ffffff' }}
     >
-      <div className="hidden md:block">
-        <Nav
-          user={currentUser}
-          token={token}
-          wide
-          center={
-            <div className="flex items-end justify-end w-full gap-2 min-w-0">
-              <button
-                onClick={onEndCall}
-                className="px-3 py-3.5 rounded-full max-h-5 bg-[#b5471b] text-white text-xs% font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
-              >
-                <DoorOpen className="w-4 h-4" /> Terminar
-              </button>
-            </div>
-          }
-        />
-      </div>
+      <Nav
+        user={currentUser}
+        token={token}
+        wide
+        center={
+          <div className="flex items-end justify-end w-full gap-2 min-w-0">
+            <button
+              onClick={onEndCall}
+              className="px-3 py-3.5 rounded-full max-h-5 bg-[#b5471b] text-white text-xs% font-medium hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            >
+              <DoorOpen className="w-4 h-4" /> Terminar
+            </button>
+          </div>
+        }
+      />
       <div className="h-26 shrink-0" />
 
       {/* Main */}

@@ -35,7 +35,7 @@ export function Nav({
 
   return (
     <div
-      className={`absolute bottom-[calc(env(safe-area-inset-bottom,0px)+2.5rem)] left-1/2 -translate-x-1/2 z-50 pointer-events-none md:fixed md:top-5 md:bottom-auto ${wide ? 'w-[calc(100%-3rem)]' : 'w-3/4 max-w-2xl'}`}
+      className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+2.5rem)] left-1/2 -translate-x-1/2 z-50 pointer-events-none md:top-5 md:bottom-auto ${wide ? 'w-[calc(100%-3rem)]' : 'w-3/4 max-w-2xl'}`}
     >
       <div
         className="pointer-events-auto rounded-full px-6 py-3.5 min-h-14.5 flex items-center justify-between gap-4"
