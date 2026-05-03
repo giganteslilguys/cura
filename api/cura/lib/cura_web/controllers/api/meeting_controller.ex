@@ -57,7 +57,10 @@ defmodule CuraWeb.Api.MeetingController do
          :ok <- authorize_doctor(meeting, user.id),
          :ok <- check_not_submitted(meeting),
          {:ok, updated} <- Meetings.update_soap_note(meeting, params) do
-      if submitting, do: Cura.Emails.send_visit_summary(updated)
+      if submitting do
+        Cura.Emails.send_visit_summary(updated)
+        Cura.Emails.send_prescription(updated)
+      end
       render(conn, :show, meeting: updated)
     end
   end

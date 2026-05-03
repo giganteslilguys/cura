@@ -80,6 +80,52 @@ defmodule Cura.Meetings do
     meeting
     |> Meeting.soap_note_changeset(attrs)
     |> Repo.update()
+    |> case do
+      {:ok, updated} ->
+        updated = Repo.preload(updated, [:doctor, patient: :patient_profile])
+        submitting = (attrs["submit"] || attrs[:submit]) == true
+        if submitting do
+          maybe_schedule_follow_up(updated)
+        end
+        {:ok, updated}
+      error -> error
+    end
+  end
+
+  defp maybe_schedule_follow_up(meeting) do
+    soap = meeting.soap_note || %{}
+
+    case Map.get(soap, "follow_up_appointment") do
+      %{"date" => date_str, "time" => time_str} when is_binary(date_str) and is_binary(time_str) ->
+        Task.start(fn -> schedule_follow_up(meeting, date_str, time_str) end)
+      _ ->
+        :ok
+    end
+  end
+
+  defp schedule_follow_up(meeting, date_str, time_str) do
+    with {:ok, date} <- Date.from_iso8601(date_str),
+         {:ok, time} <- Time.from_iso8601(time_str),
+         slots <- get_available_slots(meeting.doctor_id, date),
+         true <- Enum.any?(slots, &(&1.time == time)) do
+      create_meeting(%{
+        "doctor_id"  => meeting.doctor_id,
+        "patient_id" => meeting.patient_id,
+        "date"       => date_str,
+        "time"       => time_str,
+        "duration"   => 15,
+        "title"      => "Follow-up: #{meeting.title}",
+        "timezone"   => "UTC"
+      })
+      |> case do
+        {:ok, follow_up_meeting} ->
+          follow_up_meeting = Repo.preload(follow_up_meeting, [:doctor, patient: :patient_profile])
+          Cura.Emails.send_booking_confirmations(follow_up_meeting)
+        _ -> :ok
+      end
+    else
+      _ -> :ok
+    end
   end
 
   def complete_meeting(%Meeting{} = meeting) do
@@ -344,7 +390,7 @@ defmodule Cura.Meetings do
         "treatment_plan": ["string"],
         "prescriptions": [{"name": "string", "dosage": "string or null", "quantity": "string or null", "refills": "string or null", "instructions": "string or null"}],
         "lab_orders": ["string"],
-        "follow_up_appointment": "string or null",
+        "follow_up_recommendation": "YYYY-MM-DD date string for the recommended follow-up, or null if no follow-up needed. IMPORTANT: this must be a future date at least 30 days after #{Date.utc_today() |> Date.to_string()} (today). Never use a date from documents or history.",
         "when_to_seek_care": ["string"]
       }
       """
@@ -486,6 +532,21 @@ defmodule Cura.Meetings do
     note
     |> Map.update("diagnoses", [], &normalize_diagnoses/1)
     |> Map.update("prescriptions", [], &normalize_prescriptions/1)
+    |> clamp_follow_up_recommendation()
+  end
+
+  defp clamp_follow_up_recommendation(note) do
+    min_date = Date.add(Date.utc_today(), 30)
+
+    case Map.get(note, "follow_up_recommendation") do
+      rec when is_binary(rec) ->
+        case Date.from_iso8601(rec) do
+          {:ok, date} when date >= min_date -> note
+          _ -> Map.put(note, "follow_up_recommendation", Date.to_string(min_date))
+        end
+      _ ->
+        note
+    end
   end
 
   defp normalize_soap_note(note), do: note

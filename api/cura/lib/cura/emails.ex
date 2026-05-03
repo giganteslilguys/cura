@@ -27,6 +27,17 @@ defmodule Cura.Emails do
     end)
   end
 
+  def send_prescription(meeting) do
+    soap = meeting.soap_note || %{}
+    prescriptions = Map.get(soap, "prescriptions", [])
+
+    if prescriptions != [] do
+      Task.start(fn ->
+        if meeting.patient, do: Mailer.deliver(prescription_email(meeting, prescriptions))
+      end)
+    end
+  end
+
   # ── Email constructors ────────────────────────────────────────────────────────
 
   defp booking_patient(meeting) do
@@ -139,6 +150,57 @@ defmodule Cura.Emails do
     |> from(@from)
     |> subject("Your visit summary — #{fmt_date(meeting.date)}")
     |> html_body(wrap_summary(patient, doctor, meeting, sections))
+  end
+
+  defp prescription_email(meeting, prescriptions) do
+    patient = meeting.patient
+    doctor  = meeting.doctor
+
+    rx_rows = Enum.map_join(prescriptions, "", fn rx ->
+      details =
+        [
+          if(rx["dosage"],       do: rx["dosage"]),
+          if(rx["quantity"],     do: "Qty: #{rx["quantity"]}"),
+          if(rx["refills"],      do: "Refills: #{rx["refills"]}"),
+          if(rx["instructions"], do: rx["instructions"])
+        ]
+        |> Enum.filter(& &1)
+
+      details_html =
+        if details != [] do
+          items = Enum.map_join(details, " &nbsp;·&nbsp; ", & &1)
+          "<p style='font-size:13px;color:#888;margin:4px 0 0;'>#{items}</p>"
+        else
+          ""
+        end
+
+      """
+      <tr>
+        <td style="padding:14px 0;border-bottom:1px solid rgba(0,0,0,0.06);">
+          <p style="font-size:15px;font-weight:600;color:#111;margin:0;">#{rx["name"]}</p>
+          #{details_html}
+        </td>
+      </tr>
+      """
+    end)
+
+    new()
+    |> to({full_name(patient), patient.email})
+    |> from(@from)
+    |> subject("Your prescription — #{fmt_date(meeting.date)}")
+    |> html_body(wrap("""
+      <h1 style="#{h1()}">Medical Prescription</h1>
+      <p style="#{p()}">Hi #{patient.first_name}, please find your prescription from your visit on #{fmt_date(meeting.date)} with Dr. #{full_name(doctor)} below. Present this email at any pharmacy.</p>
+      #{detail_table([
+        {"Doctor",  "Dr. #{full_name(doctor)}"},
+        {"Patient", full_name(patient)},
+        {"Date",    fmt_date(meeting.date)}
+      ])}
+      <table cellpadding="0" cellspacing="0" style="width:100%;margin-top:8px;">
+        #{rx_rows}
+      </table>
+      <p style="font-size:12px;color:#aaa;margin-top:24px;line-height:1.5;">This prescription was issued by Dr. #{full_name(doctor)} via Cura Health on #{fmt_date(meeting.date)}.</p>
+    """))
   end
 
   defp wrap_summary(patient, doctor, meeting, sections) do
@@ -316,6 +378,22 @@ defmodule Cura.Emails do
       </div>
       """
     end)
+  end
+
+  defp follow_up_html(%{"date" => date_str, "time" => time_str}) do
+    text =
+      with {:ok, date} <- Date.from_iso8601(date_str),
+           {:ok, time} <- Time.from_iso8601(time_str) do
+        "#{fmt_date(date)} at #{fmt_time(time)}"
+      else
+        _ -> "#{date_str} at #{time_str}"
+      end
+
+    """
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:10px;background:#faf9f7;border:1px solid rgba(0,0,0,0.06);">
+      <p style="font-size:14px;color:#444;margin:0;line-height:1.55;">#{text}</p>
+    </div>
+    """
   end
 
   defp follow_up_html(text) do

@@ -295,12 +295,12 @@ export function SummaryView({
 
         {/* Follow-Up */}
         {follow_up && (
-          <Section
-            icon={<Calendar className="w-4 h-4" />}
-            title="Consulta de Seguimento"
-            defaultOpen={false}
-          >
-            <p className="text-sm text-stone-700">{follow_up}</p>
+          <Section icon={<Calendar className="w-4 h-4" />} title="Consulta de Seguimento" defaultOpen={false}>
+            <p className="text-sm text-stone-700">
+              {typeof follow_up === 'object' && follow_up !== null
+                ? new Date(`${follow_up.date}T${follow_up.time}`).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                : follow_up}
+            </p>
           </Section>
         )}
 

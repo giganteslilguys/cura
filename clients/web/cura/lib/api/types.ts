@@ -92,7 +92,7 @@ export type VisitSummary = {
   treatment_plan: string[];
   prescriptions: Prescription[];
   lab_orders: string[];
-  follow_up_appointment: string | null;
+  follow_up_appointment: { date: string; time: string } | null;
   when_to_seek_care: string[];
 };
 

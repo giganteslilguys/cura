@@ -42,6 +42,8 @@ import {
 import Image from 'next/image';
 import { Nav } from '@/components/nav';
 import { PUBLIC_SOCKET_URL } from '@/lib/api/config';
+import { getDoctorSlots } from '@/lib/api/availability';
+import type { TimeSlot } from '@/lib/api/types';
 import { getOnSitePhase } from '@/lib/meeting/phase';
 import { useRouter } from 'next/navigation';
 
@@ -1057,39 +1059,20 @@ function DoctorPostMeetingView({
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [transcriptLoading, setTranscriptLoading] = useState(true);
 
-  const [bpInput, setBpInput] = useState(
-    meeting.soap_note?.vitals?.blood_pressure ?? '',
-  );
-  const [hrInput, setHrInput] = useState(
-    meeting.soap_note?.vitals?.heart_rate ?? '',
-  );
-  const [tempInput, setTempInput] = useState(
-    meeting.soap_note?.vitals?.temperature ?? '',
-  );
-  const [weightInput, setWeightInput] = useState(
-    meeting.soap_note?.vitals?.weight ?? '',
-  );
-  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>(
-    meeting.soap_note?.diagnoses ?? [],
-  );
-  const [clinicalAssessment, setClinicalAssessment] = useState(
-    meeting.soap_note?.clinical_assessment ?? '',
-  );
-  const [treatmentPlan, setTreatmentPlan] = useState<string[]>(
-    meeting.soap_note?.treatment_plan ?? [],
-  );
-  const [prescriptions, setPrescriptions] = useState<Prescription[]>(
-    meeting.soap_note?.prescriptions ?? [],
-  );
-  const [labOrders, setLabOrders] = useState<string[]>(
-    meeting.soap_note?.lab_orders ?? [],
-  );
-  const [followUp, setFollowUp] = useState(
-    meeting.soap_note?.follow_up_appointment ?? '',
-  );
-  const [whenToSeekCare, setWhenToSeekCare] = useState<string[]>(
-    meeting.soap_note?.when_to_seek_care ?? [],
-  );
+  const [bpInput, setBpInput] = useState(meeting.soap_note?.vitals?.blood_pressure ?? "");
+  const [hrInput, setHrInput] = useState(meeting.soap_note?.vitals?.heart_rate ?? "");
+  const [tempInput, setTempInput] = useState(meeting.soap_note?.vitals?.temperature ?? "");
+  const [weightInput, setWeightInput] = useState(meeting.soap_note?.vitals?.weight ?? "");
+  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>(meeting.soap_note?.diagnoses ?? []);
+  const [clinicalAssessment, setClinicalAssessment] = useState(meeting.soap_note?.clinical_assessment ?? "");
+  const [treatmentPlan, setTreatmentPlan] = useState<string[]>(meeting.soap_note?.treatment_plan ?? []);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>(meeting.soap_note?.prescriptions ?? []);
+  const [labOrders, setLabOrders] = useState<string[]>(meeting.soap_note?.lab_orders ?? []);
+  const [followUp, setFollowUp] = useState<{ date: string; time: string } | null>(meeting.soap_note?.follow_up_appointment ?? null);
+  const [followUpDate, setFollowUpDate] = useState(meeting.soap_note?.follow_up_appointment?.date ?? "");
+  const [followUpSlots, setFollowUpSlots] = useState<TimeSlot[]>([]);
+  const [followUpSlotsLoading, setFollowUpSlotsLoading] = useState(false);
+  const [whenToSeekCare, setWhenToSeekCare] = useState<string[]>(meeting.soap_note?.when_to_seek_care ?? []);
 
   const [submitted, setSubmitted] = useState(meeting.soap_note_submitted);
   const [saving, setSaving] = useState(false);
@@ -1168,11 +1151,11 @@ function DoctorPostMeetingView({
             : null,
         diagnoses: diagnoses.filter((d) => d.condition.trim()),
         clinical_assessment: clinicalAssessment.trim() || null,
-        treatment_plan: treatmentPlan.filter((t) => t.trim()),
-        prescriptions: prescriptions.filter((p) => p.name.trim()),
-        lab_orders: labOrders.filter((l) => l.trim()),
-        follow_up_appointment: followUp.trim() || null,
-        when_to_seek_care: whenToSeekCare.filter((w) => w.trim()),
+        treatment_plan: treatmentPlan.filter(t => t.trim()),
+        prescriptions: prescriptions.filter(p => p.name.trim()),
+        lab_orders: labOrders.filter(l => l.trim()),
+        follow_up_appointment: followUp ?? null,
+        when_to_seek_care: whenToSeekCare.filter(w => w.trim()),
       };
       await saveVisitSummary(meeting.id, note, doSubmit, token);
       if (doSubmit) setSubmitted(true);
@@ -1201,9 +1184,38 @@ function DoctorPostMeetingView({
       if (note.treatment_plan?.length) setTreatmentPlan(note.treatment_plan);
       if (note.prescriptions?.length) setPrescriptions(note.prescriptions);
       if (note.lab_orders?.length) setLabOrders(note.lab_orders);
-      if (note.follow_up_appointment) setFollowUp(note.follow_up_appointment);
-      if (note.when_to_seek_care?.length)
-        setWhenToSeekCare(note.when_to_seek_care);
+      const rawNote = note as unknown as Record<string, unknown>;
+      const recommendation = rawNote.follow_up_recommendation as string | null | undefined;
+      if (recommendation) {
+        const minDate = new Date();
+        minDate.setDate(minDate.getDate() + 30);
+        const recDate = new Date(recommendation + 'T12:00:00');
+        const startDate = recDate > minDate ? recDate : minDate;
+        const startDateStr = startDate.toISOString().split('T')[0];
+        setFollowUpDate(startDateStr);
+        setFollowUpSlotsLoading(true);
+        try {
+          // Try up to 7 days from the recommended date to find an available slot
+          let found = false;
+          for (let offset = 0; offset < 7 && !found; offset++) {
+            const d = new Date(startDateStr + 'T12:00:00');
+            d.setDate(d.getDate() + offset);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            const { slots } = await getDoctorSlots(meeting.doctor!.id, dateStr, token);
+            if (slots.length > 0) {
+              setFollowUpDate(dateStr);
+              setFollowUpSlots(slots);
+              setFollowUp({ date: dateStr, time: slots[0].time });
+              found = true;
+            }
+          }
+        } catch {
+          // leave picker empty
+        } finally {
+          setFollowUpSlotsLoading(false);
+        }
+      }
+      if (note.when_to_seek_care?.length) setWhenToSeekCare(note.when_to_seek_care);
     } catch {
       setSaveError(
         'Não foi possível gerar o rascunho. Verifique se existe uma transcrição disponível.',
@@ -1666,17 +1678,63 @@ function DoctorPostMeetingView({
               </FormSection>
 
               {/* Follow-Up Appointment */}
-              <FormSection
-                icon={<CalendarIcon className="w-4 h-4" />}
-                title="Consulta de Seguimento"
-              >
-                <input
-                  value={followUp}
-                  onChange={(e) => setFollowUp(e.target.value)}
-                  disabled={submitted}
-                  placeholder="ex. Regressar em 4 semanas, ou marcar se os sintomas piorarem"
-                  className={inputCls}
-                />
+              <FormSection icon={<CalendarIcon className="w-4 h-4" />} title="Consulta de Seguimento">
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    value={followUpDate}
+                    min={(() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]; })()}
+                    disabled={submitted}
+                    onChange={async e => {
+                      const date = e.target.value;
+                      setFollowUpDate(date);
+                      setFollowUp(null);
+                      if (!date) { setFollowUpSlots([]); return; }
+                      setFollowUpSlotsLoading(true);
+                      try {
+                        const { slots } = await getDoctorSlots(meeting.doctor!.id, date, token);
+                        setFollowUpSlots(slots);
+                      } catch {
+                        setFollowUpSlots([]);
+                      } finally {
+                        setFollowUpSlotsLoading(false);
+                      }
+                    }}
+                    className={inputCls}
+                  />
+                  {followUpDate && (
+                    followUpSlotsLoading ? (
+                      <p className="text-xs text-stone-400">Loading available slots…</p>
+                    ) : followUpSlots.length === 0 ? (
+                      <p className="text-xs text-stone-400">No available slots on this date. Try another day.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {followUpSlots.map(slot => {
+                          const [h, m] = slot.time.split(':');
+                          const hour = parseInt(h);
+                          const label = `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+                          const selected = followUp?.date === followUpDate && followUp?.time === slot.time;
+                          return (
+                            <button
+                              key={slot.time}
+                              type="button"
+                              disabled={submitted}
+                              onClick={() => setFollowUp(selected ? null : { date: followUpDate, time: slot.time })}
+                              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${selected ? 'bg-[#b5471b] text-white border-[#b5471b]' : 'bg-white text-stone-600 border-stone-200 hover:border-[#b5471b] hover:text-[#b5471b]'}`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )
+                  )}
+                  {followUp && (
+                    <p className="text-xs text-[#b5471b] font-medium">
+                      Selected: {new Date(`${followUp.date}T${followUp.time}`).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
               </FormSection>
 
               {/* When to Seek Immediate Care */}
@@ -3141,12 +3199,12 @@ function PatientPostMeetingView({
 
         {/* Follow-Up Appointment */}
         {follow_up_appointment && (
-          <SummarySection
-            icon={<CalendarIcon className="w-4 h-4" />}
-            title="Consulta de Seguimento"
-            defaultOpen={false}
-          >
-            <p className="text-sm text-stone-700">{follow_up_appointment}</p>
+          <SummarySection icon={<CalendarIcon className="w-4 h-4" />} title="Consulta de Seguimento" defaultOpen={false}>
+            <p className="text-sm text-stone-700">
+              {typeof follow_up_appointment === 'object'
+                ? new Date(`${follow_up_appointment.date}T${follow_up_appointment.time}`).toLocaleString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+                : follow_up_appointment}
+            </p>
           </SummarySection>
         )}
 
