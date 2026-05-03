@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
 import { ArrowRight, Calendar, Clock, FileText, Timer, X } from 'lucide-react';
 import type { Meeting, User } from '@/lib/api/types';
 
@@ -80,24 +79,24 @@ function MeetingCard({ m, user }: { m: Meeting; user: User }) {
         )}
       </div>
 
-      {/* Date / time / duration */}
-      <div className="flex items-center gap-3 text-sm text-black/40 flex-wrap">
-        <span className="flex items-center gap-1">
-          <Calendar className="w-3.5 h-3.5 shrink-0" />
-          {fmtDate(m.date)}
-        </span>
-        <span className="flex items-center gap-1">
-          <Clock className="w-3.5 h-3.5 shrink-0" />
-          {fmtTime(m.time)}
-        </span>
-        <span className="flex items-center gap-1">
-          <Timer className="w-3.5 h-3.5 shrink-0" />
-          {m.duration} min
-        </span>
-      </div>
+      {/* Date / time / duration + actions on the same row */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 text-sm text-black/40 flex-wrap">
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 shrink-0" />
+            {fmtDate(m.date)}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5 shrink-0" />
+            {fmtTime(m.time)}
+          </span>
+          <span className="flex items-center gap-1">
+            <Timer className="w-3.5 h-3.5 shrink-0" />
+            {m.duration} min
+          </span>
+        </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
         {user.role === 'patient' && upcoming && (
           <Link
             href={`/meetings/${m.id}`}
@@ -143,6 +142,7 @@ function MeetingCard({ m, user }: { m: Meeting; user: User }) {
             Submeter relatório
           </Link>
         )}
+        </div>
       </div>
     </div>
   );
@@ -167,6 +167,16 @@ export function MeetingsList({ upcoming, past, user }: { upcoming: Meeting[]; pa
     <div>
       {/* Tabs */}
       <div className="relative flex gap-1 p-1 rounded-full mb-6" style={{ background: 'rgba(0,0,0,0.05)' }}>
+        {/* Sliding capsule — pure CSS, immune to parent motion state */}
+        <span
+          className="absolute top-1 bottom-1 rounded-full bg-white shadow-sm pointer-events-none"
+          style={{
+            width: 'calc(50% - 6px)',
+            left: 4,
+            transform: tab === 'past' ? 'translateX(calc(100% + 4px))' : 'translateX(0)',
+            transition: 'transform 0.22s cubic-bezier(0.16,1,0.3,1)',
+          }}
+        />
         {TABS.map(t => (
           <button
             key={t.id}
@@ -174,14 +184,6 @@ export function MeetingsList({ upcoming, past, user }: { upcoming: Meeting[]; pa
             className="relative flex-1 py-2 rounded-full text-sm font-medium z-10 transition-colors duration-200"
             style={{ color: tab === t.id ? '#000' : 'rgba(0,0,0,0.4)' }}
           >
-            {tab === t.id && (
-              <motion.span
-                layoutId="tab-capsule"
-                className="absolute inset-0 rounded-full bg-white shadow-sm"
-                style={{ zIndex: -1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 38 }}
-              />
-            )}
             {t.label}
           </button>
         ))}
