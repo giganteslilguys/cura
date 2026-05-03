@@ -1,4 +1,4 @@
-import { Shield, Sparkles, FileText, ArrowRight } from 'lucide-react';
+import { Sparkles, FileText, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -35,19 +35,6 @@ export default async function LandingPage() {
         />
 
         <div className="relative z-10 max-w-3xl mx-auto flex flex-col items-center gap-8">
-          {/* Eyebrow */}
-          <div
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-medium tracking-widest uppercase"
-            style={{
-              background: 'rgba(181,71,27,0.07)',
-              color: '#b5471b',
-              border: '1px solid rgba(181,71,27,0.18)',
-            }}
-          >
-            <Shield className="w-3 h-3" />
-            Conforme HIPAA · Cifrado de Ponta a Ponta
-          </div>
-
           {/* Headline */}
           <h1
             className="text-6xl sm:text-7xl font-semibold tracking-tight leading-[1.05]"
@@ -70,7 +57,7 @@ export default async function LandingPage() {
               className="flex items-center gap-2 rounded-full px-7 py-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
               style={{ background: '#b5471b' }}
             >
-              Sou doente
+              Sou paciente
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
