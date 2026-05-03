@@ -2386,7 +2386,7 @@ function SuggestionCard({
         ? 'Ação'
         : suggestion.type === 'flag'
           ? 'Alerta'
-          : suggestion.type[0].toUpperCase() + suggestion.type.slice(1);
+          : (suggestion.type as string)[0].toUpperCase() + (suggestion.type as string).slice(1);
 
   return (
     <div

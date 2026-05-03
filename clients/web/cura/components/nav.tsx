@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { LogOut } from 'lucide-react';
 import type { User } from '@/lib/api/types';
 import { signOut } from '@/lib/api/auth';
@@ -49,14 +50,16 @@ export function Nav({
             'inset 0 1px 0 rgba(255,255,255,0.85), 0 6px 14px rgba(0,0,0,0.08)',
         }}
       >
-        <Image
-          src="/cura.svg"
-          alt="Cura"
-          width={54}
-          height={14}
-          priority
-          className="shrink-0"
-        />
+        <Link href={user ? '/meetings' : '/'}>
+          <Image
+            src="/cura.svg"
+            alt="Cura"
+            width={54}
+            height={14}
+            priority
+            className="shrink-0"
+          />
+        </Link>
         {mobileCenter && (
           <div className="flex md:hidden flex-1 items-center justify-center gap-2">
             {mobileCenter}

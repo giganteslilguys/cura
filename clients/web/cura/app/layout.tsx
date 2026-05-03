@@ -12,6 +12,9 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "cura",
   description: "Healthcare video consultations",
+  icons: {
+    icon: "/logo1.webp",
+  },
 };
 
 export default function RootLayout({
