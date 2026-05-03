@@ -28,7 +28,8 @@ export function StartOnSite() {
         className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-black/10 hover:border-[#b5471b] hover:text-[#b5471b] text-sm font-medium text-black/60 transition-colors"
       >
         <Stethoscope className="w-4 h-4" />
-        Iniciar consulta presencial
+        <span className="hidden md:block">Iniciar consulta presencial</span>
+        <span className="block md:hidden">Local</span>
       </button>
 
       <dialog
@@ -41,7 +42,9 @@ export function StartOnSite() {
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-stone-100">
           <div className="flex items-center gap-2">
             <Stethoscope className="w-4 h-4 text-[#b5471b]" />
-            <span className="text-sm font-semibold text-stone-900">Iniciar uma consulta presencial</span>
+            <span className="text-sm font-semibold text-stone-900">
+              Iniciar uma consulta presencial
+            </span>
           </div>
           <button
             type="button"
@@ -54,12 +57,14 @@ export function StartOnSite() {
 
         <form action={formAction} className="flex flex-col gap-4 px-6 py-5">
           <p className="text-xs text-stone-500">
-            O doente está presente em pessoa — vamos gravar apenas o áudio e começar
-            a produzir notas da consulta de imediato.
+            O doente está presente em pessoa — vamos gravar apenas o áudio e
+            começar a produzir notas da consulta de imediato.
           </p>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-stone-600">Email do doente</label>
+            <label className="text-xs font-medium text-stone-600">
+              Email do doente
+            </label>
             <input
               name="patient_email"
               type="email"
@@ -71,7 +76,8 @@ export function StartOnSite() {
 
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-stone-600">
-              Motivo da consulta <span className="text-stone-400 font-normal">(opcional)</span>
+              Motivo da consulta{' '}
+              <span className="text-stone-400 font-normal">(opcional)</span>
             </label>
             <input
               name="title"

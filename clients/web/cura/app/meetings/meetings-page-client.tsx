@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-
-import { CalendarDays, CalendarPlus, LayoutList, Settings2 } from 'lucide-react';
+import { Calendar, CalendarDays, CalendarPlus, LayoutList } from 'lucide-react';
 import type { Meeting, User } from '@/lib/api/types';
-import { MeetingsList } from './meetings-list';
+
 import { CalendarView } from './calendar-view';
+import Link from 'next/link';
+import { MeetingsList } from './meetings-list';
 import { StartOnSite } from './start-on-site';
+import { useState } from 'react';
 
 type View = 'list' | 'calendar';
 
@@ -46,7 +46,7 @@ export function MeetingsPageClient({
     >
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <h1 className="text-2xl font-semibold text-black">Consultas</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex justify-between items-center w-full">
           {/* View toggle */}
           <div
             className="flex items-center p-1 rounded-full gap-0.5"
@@ -90,7 +90,7 @@ export function MeetingsPageClient({
                 className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors"
                 style={{ background: 'rgba(0,0,0,0.04)', color: '#0f0a07', border: '1px solid rgba(0,0,0,0.08)' }}
               >
-                <Settings2 className="w-3.5 h-3.5" />
+                <Calendar className="w-3.5 h-3.5" />
                 Disponibilidade
               </Link>
             </>
